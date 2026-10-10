@@ -57,3 +57,23 @@ export interface PlaceProvider {
   readonly source: string
   around(box: BoundingBox): Promise<Place[]>
 }
+
+export interface RouteSummary {
+  id: string
+  name: string
+  distanceKm: number
+  ascentM: number | null
+}
+
+/** Bibliothèque d'itinéraires d'un compte externe (Strava), accessible après connexion de l'utilisateur·rice */
+export interface RouteLibrary {
+  readonly source: string
+  isConnected(): boolean
+  /** Redirige vers la page d'autorisation du service */
+  beginConnection(): void
+  /** Termine la connexion au retour de la redirection, avec le code et l'état reçus dans l'URL */
+  finishConnection(code: string, state: string | null): Promise<void>
+  disconnect(): void
+  list(): Promise<RouteSummary[]>
+  gpx(id: string): Promise<string>
+}
