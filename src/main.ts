@@ -9,6 +9,7 @@ import { MeteoFranceVigilance } from './infra/meteoFranceVigilance'
 import { OpenMeteoDaylight } from './infra/openMeteoDaylight'
 import { OpenMeteoForecast } from './infra/openMeteoForecast'
 import { RefugesInfoPlaces } from './infra/refugesInfoPlaces'
+import { StravaRoutes } from './infra/stravaRoutes'
 import { SupabaseHealth } from './infra/supabaseHealth'
 import { createMap, createRouteLayers, showUserPosition } from './ui/map'
 import { createPanel } from './ui/panel'
@@ -39,7 +40,44 @@ async function checkSupabase() {
   else console.error(`Supabase KO : ${result.detail}`)
 }
 
-function main() {
+function createStravaLibrary(): StravaRoutes | undefined {
+  const clientId = import.meta.env.VITE_STRAVA_CLIENT_ID
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+  if (!clientId || !supabaseUrl || !anonKey) {
+    console.info('Strava non configuré (VITE_STRAVA_CLIENT_ID et VITE_SUPABASE_* requis) : import d’itinéraires désactivé')
+    return undefined
+  }
+  return new StravaRoutes({
+    clientId,
+    redirectUri: location.origin + location.pathname,
+    tokenEndpoint: `${supabaseUrl}/functions/v1/strava-token`,
+    anonKey,
+  })
+}
+
+/** Au retour de Strava, l'URL contient ?code=...&state=... : on termine la connexion puis on nettoie l'URL */
+async function completeStravaReturn(strava: StravaRoutes): Promise<string | null> {
+  const params = new URLSearchParams(location.search)
+  const code = params.get('code')
+  const denied = params.get('error')
+  if (!code && !denied) return null
+
+  const state = params.get('state')
+  history.replaceState(null, '', location.pathname)
+  if (denied || !code) return 'Connexion Strava annulée.'
+  try {
+    await strava.finishConnection(code, state)
+    return null
+  } catch (error) {
+    return error instanceof Error ? error.message : 'Connexion Strava impossible.'
+  }
+}
+
+async function main() {
+  const strava = createStravaLibrary()
+  const stravaError = strava ? await completeStravaReturn(strava) : null
+
   const map = createMap(document.getElementById('map')!)
   const layers = createRouteLayers(map)
   let routeShown = false
@@ -60,7 +98,9 @@ function main() {
         panel.showError(error instanceof Error ? error.message : 'Une erreur inattendue est survenue.')
       }
     },
+    strava,
   )
+  if (stravaError) panel.showError(stravaError)
 
   // La localisation ne doit pas écraser le cadrage d'un tracé déjà affiché
   locateUser(new BrowserGeolocator()).then((location) => {

@@ -4,6 +4,7 @@ import { MeteoFranceVigilance } from './meteoFranceVigilance'
 import { OpenMeteoDaylight } from './openMeteoDaylight'
 import { OpenMeteoForecast } from './openMeteoForecast'
 import { RefugesInfoPlaces } from './refugesInfoPlaces'
+import { StravaRoutes } from './stravaRoutes'
 
 function stubFetch(routes: Record<string, unknown>, status = 200) {
   const calls: { url: string; headers?: HeadersInit }[] = []
@@ -202,5 +203,74 @@ describe('MeteoFranceVigilance', () => {
     await expect(new MeteoFranceVigilance('périmée', () => now).highestLevel({ lat: 48, lng: 7 }, now)).rejects.toThrow(
       /refusée ou expirée/,
     )
+  })
+})
+
+describe('StravaRoutes', () => {
+  const config = {
+    clientId: '123',
+    redirectUri: 'http://localhost:5173/',
+    tokenEndpoint: 'https://proj.supabase.co/functions/v1/strava-token',
+    anonKey: 'anon',
+  }
+
+  function memoryStorage(initial: Record<string, string> = {}): Storage {
+    const data = new Map(Object.entries(initial))
+    return {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    } as Storage
+  }
+
+  const sessionOf = (expiresAt: number) =>
+    JSON.stringify({ accessToken: 'old', refreshToken: 'refresh', expiresAt, athleteId: 42 })
+  const future = () => Math.floor(Date.now() / 1000) + 3600
+
+  it('liste les itinéraires de l’athlète connecté', async () => {
+    const calls = stubFetch({
+      '/athletes/42/routes': [{ id_str: '9', name: 'Hohneck', distance: 12300, elevation_gain: 640 }],
+    })
+    const storage = memoryStorage({ 'wazoutdoor.strava': sessionOf(future()) })
+    const routes = await new StravaRoutes(config, storage).list()
+    expect(routes).toEqual([{ id: '9', name: 'Hohneck', distanceKm: 12.3, ascentM: 640 }])
+    expect(calls[0].headers).toEqual({ Authorization: 'Bearer old' })
+  })
+
+  it('rafraîchit le jeton expiré avant d’appeler Strava', async () => {
+    const calls = stubFetch({
+      'strava-token': { access_token: 'new', refresh_token: 'refresh2', expires_at: future() },
+      '/athletes/42/routes': [],
+    })
+    const storage = memoryStorage({ 'wazoutdoor.strava': sessionOf(1) })
+    await new StravaRoutes(config, storage).list()
+    expect(calls.map((c) => c.url)).toEqual([config.tokenEndpoint, expect.stringContaining('/athletes/42/routes')])
+    expect(calls[1].headers).toEqual({ Authorization: 'Bearer new' })
+    expect(JSON.parse(storage.getItem('wazoutdoor.strava')!).refreshToken).toBe('refresh2')
+  })
+
+  it('se déconnecte quand Strava répond 401', async () => {
+    stubFetch({ '/athletes/42/routes': {} }, 401)
+    const storage = memoryStorage({ 'wazoutdoor.strava': sessionOf(future()) })
+    const strava = new StravaRoutes(config, storage)
+    await expect(strava.list()).rejects.toThrow(/expiré/)
+    expect(strava.isConnected()).toBe(false)
+  })
+
+  it('refuse un retour d’autorisation dont l’état ne correspond pas', async () => {
+    const calls = stubFetch({})
+    const storage = memoryStorage({ 'wazoutdoor.strava.state': 'attendu' })
+    await expect(new StravaRoutes(config, storage).finishConnection('code', 'autre')).rejects.toThrow(/état/)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('enregistre la session après l’échange du code', async () => {
+    stubFetch({
+      'strava-token': { access_token: 'a', refresh_token: 'r', expires_at: future(), athlete: { id: 42 } },
+    })
+    const storage = memoryStorage({ 'wazoutdoor.strava.state': 's' })
+    const strava = new StravaRoutes(config, storage)
+    await strava.finishConnection('code', 's')
+    expect(strava.isConnected()).toBe(true)
   })
 })

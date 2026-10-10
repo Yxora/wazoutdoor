@@ -390,3 +390,13 @@ input:focus-visible {
     padding: 12px 16px;
   }
 }
+
+.library {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.library select {
+  width: 100%;
+  font: inherit;
+}

@@ -1,4 +1,6 @@
 import type { Evaluation } from '../application/evaluateRoute'
+import { listLibraryRoutes } from '../application/listLibraryRoutes'
+import type { RouteLibrary } from '../application/ports'
 import { PROFILES, type Profile, type ProfileId } from '../domain/profile'
 import { formatDuration, type CriterionResult, type CriterionStatus, type Facet, type Verdict } from '../domain/serenity'
 
@@ -104,10 +106,73 @@ function facetList(facets: Facet[]): HTMLElement {
   )
 }
 
+function libraryPicker(library: RouteLibrary, onLoaded: (gpx: string, label: string) => void): HTMLElement {
+  const box = el('div', { className: 'library' })
+  const status = el('p', { className: 'hint', role: 'status' })
+
+  async function showRoutes() {
+    status.textContent = `Chargement de vos itinéraires ${library.source}…`
+    box.replaceChildren(status)
+    const result = await listLibraryRoutes(library)
+    if (!result.ok) {
+      status.textContent = result.detail
+      box.replaceChildren(status, connectButton())
+      return
+    }
+    if (result.routes.length === 0) {
+      status.textContent = `Aucun itinéraire trouvé sur ${library.source}.`
+      box.replaceChildren(status, disconnectButton())
+      return
+    }
+    const select = el('select', {}, el('option', { value: '' }, 'Choisir un itinéraire…'))
+    for (const route of result.routes) {
+      const ascent = route.ascentM === null ? '' : `, +${Math.round(route.ascentM)} m`
+      select.append(el('option', { value: route.id }, `${route.name} (${route.distanceKm.toFixed(1)} km${ascent})`))
+    }
+    select.addEventListener('change', async () => {
+      const route = result.routes.find((r) => r.id === select.value)
+      if (!route) return
+      status.textContent = `Chargement de « ${route.name} »…`
+      try {
+        onLoaded(await library.gpx(route.id), `${route.name} (${library.source})`)
+        status.textContent = ''
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : String(error)
+      }
+    })
+    status.textContent = ''
+    box.replaceChildren(el('label', { className: 'field' }, `Mes itinéraires ${library.source}`, select), status, disconnectButton())
+  }
+
+  function connectButton(): HTMLElement {
+    const button = el('button', { type: 'button' }, `Connecter ${library.source}`)
+    button.addEventListener('click', () => library.beginConnection())
+    return button
+  }
+
+  function disconnectButton(): HTMLElement {
+    const button = el('button', { type: 'button' }, `Déconnecter ${library.source}`)
+    button.addEventListener('click', () => {
+      library.disconnect()
+      render()
+    })
+    return button
+  }
+
+  function render() {
+    if (library.isConnected()) void showRoutes()
+    else box.replaceChildren(connectButton(), el('p', { className: 'hint' }, `Powered by ${library.source}`))
+  }
+
+  render()
+  return box
+}
+
 export function createPanel(
   root: HTMLElement,
   example: GpxExample,
   onEvaluate: (request: EvaluationRequest) => void,
+  library?: RouteLibrary,
 ): Panel {
   let gpxText: string | null = null
 
@@ -142,11 +207,18 @@ export function createPanel(
     gpxLabel.textContent = `Tracé : ${example.label}`
   })
 
+  const libraryField = library ? libraryPicker(library, (gpx, label) => {
+    gpxText = gpx
+    fileInput.value = ''
+    gpxLabel.textContent = `Tracé : ${label}`
+  }) : ''
+
   const form = el(
     'form',
     { className: 'form' },
     profileField,
     el('label', { className: 'field' }, 'Heure de départ', startInput),
+    libraryField,
     el('label', { className: 'field' }, 'Tracé GPX', fileInput),
     el('div', { className: 'row' }, exampleButton, gpxLabel),
     submit,
