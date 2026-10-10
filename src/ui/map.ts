@@ -10,11 +10,9 @@ import { CLOSED_STATUS_ICON_PATH, odIcon, WARNING_ICON_PATH } from './signalisat
 const VOSGES: L.LatLngTuple = [48.0, 7.0]
 const ZOOM_INITIAL = 9
 
-const ROUTE_COLOR = '#c2185b'
-const USER_COLOR = '#1a73e8'
 
 // Glyphes SVG statiques (viewBox 24). Chaque catégorie a une couleur ET un dessin différents :
-// la couleur ne doit pas être le seul moyen de distinguer les lieux.
+// la couleur ne doit pas être le seul moyen de distinguer les lieux. Couleurs : palette « pictos » du chart, le dessin fait la différence.
 const GLYPH = {
   drop: '<path d="M12 3.5c-3 4-6 7.3-6 10.6a6 6 0 0 0 12 0c0-3.3-3-6.6-6-10.6z"/>',
   tent: '<path fill-rule="evenodd" d="M12 4 2.5 19h19L12 4zm0 7 3.6 6H8.4L12 11z"/>',
@@ -27,15 +25,17 @@ export interface MarkerStyle {
   label: string
   color: string
   glyph: string
+  /** Couleur du glyphe : l'encre sur les aplats clairs du chart, le blanc sur l'encre */
+  glyphColor?: string
 }
 
-const START_STYLE: MarkerStyle = { label: 'Départ du tracé', color: '#1c2420', glyph: GLYPH.flag }
+const START_STYLE: MarkerStyle = { label: 'Départ du tracé', color: 'var(--od-ink)', glyph: GLYPH.flag, glyphColor: 'var(--od-ink-inverse)' }
 
 const CATEGORY_STYLE: Record<PlaceCategory, MarkerStyle> = {
-  water: { label: PLACE_CATEGORY_LABEL.water, color: '#1d70b8', glyph: GLYPH.drop },
-  hut: { label: PLACE_CATEGORY_LABEL.hut, color: '#a34a08', glyph: GLYPH.tent },
-  refuge: { label: PLACE_CATEGORY_LABEL.refuge, color: '#6a3d9a', glyph: GLYPH.house },
-  lodge: { label: PLACE_CATEGORY_LABEL.lodge, color: '#1e7b43', glyph: GLYPH.bed },
+  water: { label: PLACE_CATEGORY_LABEL.water, color: 'var(--od-picto-water)', glyph: GLYPH.drop },
+  hut: { label: PLACE_CATEGORY_LABEL.hut, color: 'var(--od-picto-earth)', glyph: GLYPH.tent },
+  refuge: { label: PLACE_CATEGORY_LABEL.refuge, color: 'var(--od-picto-rock)', glyph: GLYPH.house },
+  lodge: { label: PLACE_CATEGORY_LABEL.lodge, color: 'var(--od-picto-leaf)', glyph: GLYPH.bed },
 }
 
 const LEGEND_CATEGORIES: PlaceCategory[] = ['water', 'hut', 'refuge', 'lodge']
@@ -45,6 +45,7 @@ export function badge(style: MarkerStyle): HTMLElement {
   const element = document.createElement('span')
   element.className = 'map-badge'
   element.style.background = style.color
+  if (style.glyphColor) element.style.color = style.glyphColor
   // Contenu statique défini dans ce fichier, jamais issu d'une source externe
   element.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="currentColor">${style.glyph}</svg>`
   return element
@@ -105,11 +106,9 @@ function addLegend(map: L.Map): void {
 
     const line = document.createElement('span')
     line.className = 'map-legend__line'
-    line.style.background = ROUTE_COLOR
 
     const dot = document.createElement('span')
     dot.className = 'map-legend__dot'
-    dot.style.background = USER_COLOR
 
     const list = document.createElement('ul')
     list.className = 'map-legend__list'
@@ -143,7 +142,7 @@ export function createMap(container: HTMLElement): L.Map {
 
 export function showUserPosition(map: L.Map, position: Coordinates): void {
   const latLng: L.LatLngTuple = [position.lat, position.lng]
-  L.circleMarker(latLng, { radius: 8, color: USER_COLOR, fillColor: USER_COLOR, fillOpacity: 0.8 })
+  L.circleMarker(latLng, { radius: 8, className: 'user-dot', fillOpacity: 0.8 })
     .bindTooltip('Vous êtes ici')
     .addTo(map)
   map.setView(latLng, 13)
@@ -180,7 +179,7 @@ export function createRouteLayers(map: L.Map): RouteLayers {
       layer.clearLayers()
       const line = L.polyline(
         route.points.map((p): L.LatLngTuple => [p.lat, p.lng]),
-        { color: ROUTE_COLOR, weight: 5, opacity: 0.85 },
+        { className: 'route-line', weight: 5, opacity: 0.9 },
       ).addTo(layer)
 
       const start = route.points[0]

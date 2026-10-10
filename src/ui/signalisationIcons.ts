@@ -25,6 +25,13 @@ export const WARNING_ICON_PATH = TYPE_ICON_PATH.eboulis
 /** Forme de statut « bloquant » (octogone barré) : danger grave, jamais distingué par la seule couleur. */
 export const CLOSED_STATUS_ICON_PATH = '<path d="M8.5 3h7L21 8.5v7L15.5 21h-7L3 15.5v-7L8.5 3z"/><path d="M6.5 6.5l11 11"/>'
 
+/** Forme de statut « praticable » : cercle avec coche. */
+export const OK_STATUS_ICON_PATH = '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>'
+
+/** Forme de statut « pas d'info » : cercle en pointillés avec « ? ». */
+export const UNKNOWN_STATUS_ICON_PATH =
+  '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><path d="M9.7 9.6a2.4 2.4 0 0 1 4.6.8c0 1.6-2.3 1.9-2.3 3.4M12 16.8v.01"/>'
+
 export const PLUS_ICON_PATH = '<path d="M12 5v14M5 12h14"/>'
 export const CLOSE_ICON_PATH = '<path d="M6 6l12 12M18 6L6 18"/>'
 export const LOCATION_ICON_PATH = '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>'

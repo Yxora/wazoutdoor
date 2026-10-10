@@ -39,6 +39,15 @@
   --od-status-unknown: #5b6470;
   --od-status-unknown-soft: #e6e8eb;
 
+  /* Registre communautaire : aplats décoratifs uniquement, jamais pour du texte ni pour porter un statut */
+  --od-picto-blaze: #f07a2b;
+  --od-picto-sun: #f4c04e;
+  --od-picto-leaf: #9cc48a;
+  --od-picto-earth: #b98757;
+  --od-picto-rock: #b4ada0;
+  --od-picto-sky: #d6e8f2;
+  --od-picto-water: #7fb6d6;
+
   --od-map-water: #9cc7de;
   --od-map-contour: #c9a57e;
   --od-map-trail: #1b2420;

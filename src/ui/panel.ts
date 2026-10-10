@@ -3,6 +3,7 @@ import { listLibraryRoutes } from '../application/listLibraryRoutes'
 import type { RouteLibrary } from '../application/ports'
 import { PROFILES, type Profile, type ProfileId } from '../domain/profile'
 import { formatDuration, type CriterionResult, type CriterionStatus, type Facet, type Verdict } from '../domain/serenity'
+import { CLOSED_STATUS_ICON_PATH, odIcon, OK_STATUS_ICON_PATH, UNKNOWN_STATUS_ICON_PATH, WARNING_ICON_PATH } from './signalisationIcons'
 
 export interface EvaluationRequest {
   profileId: ProfileId
@@ -34,7 +35,13 @@ const VERDICT_LABEL: Record<Verdict, string> = {
   alert: 'Plusieurs points d’alerte',
 }
 
-const STATUS_ICON: Record<CriterionStatus, string> = { ok: '✔', warning: '⚠', alert: '✖', unknown: '?' }
+// Le statut n'est jamais porté par la couleur seule : une forme, un libellé, une couleur (chart WazeOutdoor)
+const STATUS_ICON_PATH: Record<CriterionStatus, string> = {
+  ok: OK_STATUS_ICON_PATH,
+  warning: WARNING_ICON_PATH,
+  alert: CLOSED_STATUS_ICON_PATH,
+  unknown: UNKNOWN_STATUS_ICON_PATH,
+}
 const STATUS_TEXT: Record<CriterionStatus, string> = {
   ok: 'Favorable',
   warning: 'À surveiller',
@@ -79,7 +86,7 @@ function criterionCard(criterion: CriterionResult): HTMLElement {
     el(
       'div',
       { className: 'criterion__head' },
-      el('span', { className: 'criterion__icon', ariaHidden: 'true' }, STATUS_ICON[criterion.status]),
+      el('span', { className: 'criterion__icon' }, odIcon(STATUS_ICON_PATH[criterion.status], 20)),
       el('strong', {}, criterion.label),
       el('span', { className: 'criterion__status' }, STATUS_TEXT[criterion.status]),
       criterion.score === null ? '' : el('span', { className: 'criterion__score' }, `${criterion.score}/100`),
@@ -98,7 +105,7 @@ function facetList(facets: Facet[]): HTMLElement {
       el(
         'li',
         { className: `facet facet--${facet.status}` },
-        el('span', { className: 'facet__icon', ariaHidden: 'true' }, STATUS_ICON[facet.status]),
+        el('span', { className: 'facet__icon' }, odIcon(STATUS_ICON_PATH[facet.status], 20)),
         el('strong', {}, `${facet.label} : `),
         facet.detail,
       ),
