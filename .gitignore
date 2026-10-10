@@ -3,3 +3,4 @@ guidelines/
 node_modules/
 dist/
 .env
+supabase/.temp/
