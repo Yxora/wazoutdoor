@@ -53,15 +53,25 @@ function deps(overrides: Partial<EvaluationDeps> = {}): EvaluationDeps {
       ],
     },
     places: { source: 'refuges', around: async () => [water, shelter] },
+    fireRisk: { source: 'firms', around: async () => [] },
+    protectedAreas: { source: 'ign', around: async () => [] },
     ...overrides,
   }
 }
 
 describe('evaluateRoute', () => {
-  it('évalue les quatre critères et résume le parcours', async () => {
+  it('évalue les sept critères et résume le parcours', async () => {
     const result = await evaluateRoute(deps(), { route, profile: PROFILES.randonneur, start })
-    expect(result.score.criteria.map((c) => c.id)).toEqual(['daylight', 'weather', 'forecast', 'water', 'shelter'])
-    expect(result.score.availableCriteria).toBe(5)
+    expect(result.score.criteria.map((c) => c.id)).toEqual([
+      'daylight',
+      'weather',
+      'forecast',
+      'water',
+      'shelter',
+      'fire',
+      'protectedArea',
+    ])
+    expect(result.score.availableCriteria).toBe(7)
     expect(result.summary.distanceKm).toBeCloseTo(5.6, 1)
     expect(result.summary.ascentM).toBeGreaterThan(0)
     expect(result.places).toHaveLength(2)
@@ -98,7 +108,7 @@ describe('evaluateRoute', () => {
     })
     const result = await evaluateRoute(broken, { route, profile: PROFILES.randonneur, start })
     expect(result.summary.ascentM).toBeNull()
-    expect(result.score.availableCriteria).toBe(5)
+    expect(result.score.availableCriteria).toBe(7)
   })
 
   it('marque un critère indisponible quand sa source échoue, sans bloquer les autres', async () => {
@@ -114,7 +124,7 @@ describe('evaluateRoute', () => {
     const weather = result.score.criteria.find((c) => c.id === 'weather')
     expect(weather?.status).toBe('unknown')
     expect(weather?.detail).toContain('clé refusée')
-    expect(result.score.availableCriteria).toBe(4)
+    expect(result.score.availableCriteria).toBe(6)
   })
 
   it('transmet à la météo la fenêtre de la sortie et l’altitude moyenne', async () => {
@@ -168,5 +178,80 @@ describe('evaluateRoute', () => {
     })
     const result = await evaluateRoute(broken, { route, profile: PROFILES.randonneur, start })
     expect(result.score.criteria.filter((c) => c.status === 'unknown').map((c) => c.id)).toEqual(['water', 'shelter'])
+  })
+
+  it('force le score à 0 quand un feu actif est détecté près du tracé', async () => {
+    const onFire = deps({
+      fireRisk: {
+        source: 'firms',
+        around: async () => [
+          { position: { lat: 48.025, lng: 7 }, acquiredAt: new Date(), confidence: 'high', frp: 12, satellite: 'N' },
+        ],
+      },
+    })
+    const result = await evaluateRoute(onFire, { route, profile: PROFILES.randonneur, start })
+    const fire = result.score.criteria.find((c) => c.id === 'fire')
+    expect(fire?.status).toBe('alert')
+    expect(result.score.total).toBe(0)
+    expect(result.score.verdict).toBe('alert')
+  })
+
+  it('marque le risque d’incendie indisponible quand FIRMS échoue, sans forcer le score à 0', async () => {
+    const broken = deps({
+      fireRisk: {
+        source: 'firms',
+        around: async () => {
+          throw new Error('clé FIRMS absente')
+        },
+      },
+    })
+    const result = await evaluateRoute(broken, { route, profile: PROFILES.randonneur, start })
+    const fire = result.score.criteria.find((c) => c.id === 'fire')
+    expect(fire?.status).toBe('unknown')
+    expect(result.score.total).not.toBe(0)
+  })
+
+  it('avertit sans forcer le score quand le tracé traverse une zone protégée', async () => {
+    const inside = deps({
+      protectedAreas: {
+        source: 'ign',
+        around: async () => [
+          {
+            name: 'Réserve test',
+            category: 'Réserve naturelle nationale',
+            polygons: [
+              [
+                [
+                  { lat: 48.01, lng: 6.9 },
+                  { lat: 48.01, lng: 7.1 },
+                  { lat: 48.04, lng: 7.1 },
+                  { lat: 48.04, lng: 6.9 },
+                  { lat: 48.01, lng: 6.9 },
+                ],
+              ],
+            ],
+          },
+        ],
+      },
+    })
+    const result = await evaluateRoute(inside, { route, profile: PROFILES.randonneur, start })
+    const protectedArea = result.score.criteria.find((c) => c.id === 'protectedArea')
+    expect(protectedArea?.status).toBe('warning')
+    expect(result.score.total).toBeGreaterThan(0)
+    expect(result.score.verdict).not.toBe('alert')
+  })
+
+  it('marque les zones protégées indisponibles quand la source IGN échoue', async () => {
+    const broken = deps({
+      protectedAreas: {
+        source: 'ign',
+        around: async () => {
+          throw new Error('503')
+        },
+      },
+    })
+    const result = await evaluateRoute(broken, { route, profile: PROFILES.randonneur, start })
+    const protectedArea = result.score.criteria.find((c) => c.id === 'protectedArea')
+    expect(protectedArea?.status).toBe('unknown')
   })
 })

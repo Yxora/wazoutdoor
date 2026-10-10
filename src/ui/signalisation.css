@@ -271,10 +271,6 @@
   height: 28px;
 }
 
-.od-pin--critical {
-  color: var(--od-status-closed);
-}
-
 .od-popup {
   font: var(--od-body);
   color: var(--od-ink);

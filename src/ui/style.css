@@ -407,8 +407,17 @@ path.user-dot {
   overflow: hidden;
 }
 
+/*
+ * `.leaflet-touch .leaflet-bar a` (feuille leaflet.css, 2 classes) a plus de poids que `.leaflet-bar a`
+ * (1 classe + balise) : sans le répéter ici, les boutons restent à 30px sur un navigateur où Leaflet
+ * détecte le tactile, sauf au survol (notre règle `:hover` est alors à spécificité égale et gagne par
+ * ordre d'apparition) — d'où un bouton à 48px au survol et l'autre resté à 30px, trop petit en comparaison.
+ */
 .leaflet-bar a,
-.leaflet-bar a:hover {
+.leaflet-bar a:hover,
+.leaflet-bar a:focus,
+.leaflet-touch .leaflet-bar a {
+  box-sizing: border-box;
   width: var(--od-size-touch);
   height: var(--od-size-touch);
   line-height: var(--od-size-touch);

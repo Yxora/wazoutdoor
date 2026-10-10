@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { Place } from './place'
 import { PROFILES } from './profile'
+import type { ProtectedArea } from './protectedArea'
 import { sampleRoute } from './route'
 import {
   computeScore,
   estimateDurationMinutes,
   formatDuration,
   scoreDaylight,
+  scoreFire,
+  scoreProtectedArea,
   scoreShelter,
   scoreWater,
   scoreWeather,
@@ -117,6 +120,61 @@ describe('scoreShelter', () => {
   })
 })
 
+describe('scoreFire', () => {
+  it('est ok sans détection à proximité du tracé', () => {
+    const result = scoreFire(longLine, [], 's')
+    expect(result.status).toBe('ok')
+    expect(result.score).toBe(100)
+  })
+
+  it('ignore une détection trop éloignée du tracé', () => {
+    const far = [{ position: { lat: 48.1, lng: 7.5 }, acquiredAt: new Date(), confidence: 'high' as const, frp: 1, satellite: 'N' }]
+    expect(scoreFire(longLine, far, 's').status).toBe('ok')
+  })
+
+  it('alerte et met le score à 0 quand un feu est détecté près du tracé', () => {
+    const near = [{ position: { lat: 48.1, lng: 7 }, acquiredAt: new Date(), confidence: 'high' as const, frp: 20, satellite: 'N' }]
+    const result = scoreFire(longLine, near, 's')
+    expect(result.status).toBe('alert')
+    expect(result.score).toBe(0)
+    expect(result.detail).toContain('1 détection')
+  })
+})
+
+function squareAround(centerLat: number): ProtectedArea {
+  return {
+    name: 'Réserve test',
+    category: 'Réserve naturelle nationale',
+    url: 'https://inpn.mnhn.fr/test',
+    polygons: [
+      [
+        [
+          { lat: centerLat - 0.01, lng: 6.99 },
+          { lat: centerLat - 0.01, lng: 7.01 },
+          { lat: centerLat + 0.01, lng: 7.01 },
+          { lat: centerLat + 0.01, lng: 6.99 },
+          { lat: centerLat - 0.01, lng: 6.99 },
+        ],
+      ],
+    ],
+  }
+}
+
+describe('scoreProtectedArea', () => {
+  it('est ok quand le tracé ne traverse aucune zone protégée', () => {
+    const result = scoreProtectedArea(longLine, [squareAround(49)], 's')
+    expect(result.status).toBe('ok')
+    expect(result.score).toBe(100)
+  })
+
+  it('avertit (sans alerte) quand le tracé traverse une zone protégée', () => {
+    const result = scoreProtectedArea(longLine, [squareAround(48.1)], 's')
+    expect(result.status).toBe('warning')
+    expect(result.score).toBe(60)
+    expect(result.facets?.[0].detail).toContain('Réserve test')
+  })
+})
+
 describe('computeScore', () => {
   const ok = scoreDaylight(at('14:00'), at('17:00'), 's')
   const weatherOk = scoreWeather(1, '88', 's')
@@ -125,6 +183,25 @@ describe('computeScore', () => {
     const result = computeScore([ok, weatherOk], randonneur)
     expect(result.total).toBe(100)
     expect(result.verdict).toBe('serene')
+  })
+
+  it('force le score à 0 quand le critère incendie est en alerte, même si tout le reste est parfait', () => {
+    const fireAlert = scoreFire(
+      longLine,
+      [{ position: { lat: 48.1, lng: 7 }, acquiredAt: new Date(), confidence: 'high', frp: 20, satellite: 'N' }],
+      's',
+    )
+    const result = computeScore([ok, weatherOk, fireAlert], randonneur)
+    expect(result.total).toBe(0)
+    expect(result.verdict).toBe('alert')
+  })
+
+  it('pondère la zone protégée comme un critère normal, sans forcer le score (contrairement à l’incendie)', () => {
+    const protectedArea = scoreProtectedArea(longLine, [squareAround(48.1)], 's')
+    const result = computeScore([ok, weatherOk, protectedArea], randonneur)
+    // poids randonneur : daylight 3, weather 3, protectedArea 2 -> (100*3 + 100*3 + 60*2) / 8 = 90
+    expect(result.total).toBe(90)
+    expect(result.verdict).not.toBe('alert')
   })
 
   it('ignore les critères indisponibles sans les compter comme bons', () => {

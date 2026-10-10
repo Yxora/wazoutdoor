@@ -6,6 +6,8 @@ import {
   computeScore,
   estimateDurationMinutes,
   scoreDaylight,
+  scoreFire,
+  scoreProtectedArea,
   scoreShelter,
   scoreWater,
   scoreWeather,
@@ -16,8 +18,10 @@ import {
 import type {
   DaylightProvider,
   ElevationProvider,
+  FireRiskProvider,
   ForecastProvider,
   PlaceProvider,
+  ProtectedAreaProvider,
   WeatherAlertProvider,
 } from './ports'
 
@@ -27,6 +31,8 @@ export interface EvaluationDeps {
   weather: WeatherAlertProvider
   forecast: ForecastProvider
   places: PlaceProvider
+  fireRisk: FireRiskProvider
+  protectedAreas: ProtectedAreaProvider
 }
 
 export interface EvaluationInput {
@@ -52,6 +58,10 @@ export interface Evaluation {
 const SAMPLE_STEP_M = 250
 const MAX_ELEVATION_POINTS = 100
 const PLACES_MARGIN_DEGREES = 0.02
+// Marge plus large que pour les lieux : couvre la zone de recherche de feux actifs autour du tracé (~10 km)
+const FIRE_MARGIN_DEGREES = 0.15
+// Juste assez pour couvrir le tracé lui-même : on ne teste que les zones qui le recouvrent réellement
+const PROTECTED_AREA_MARGIN_DEGREES = 0.01
 
 const reason = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -82,7 +92,7 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
   const durationMin = estimateDurationMinutes(lengthM, ascentM ?? 0, profile)
   const end = new Date(start.getTime() + durationMin * 60_000)
 
-  const [daylight, weather, forecast, places] = await Promise.all([
+  const [daylight, weather, forecast, places, fire, protectedArea] = await Promise.all([
     deps.daylight.sunset(origin, start).then(
       (sunset) => scoreDaylight(end, sunset, deps.daylight.source),
       (error): CriterionResult =>
@@ -101,6 +111,15 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
       (found) => ({ found, error: null as string | null }),
       (error) => ({ found: [] as Place[], error: reason(error) }),
     ),
+    deps.fireRisk.around(boundingBox(route.points, FIRE_MARGIN_DEGREES)).then(
+      (detections) => scoreFire(samples, detections, deps.fireRisk.source),
+      (error): CriterionResult => unknownCriterion('fire', 'Risque d’incendie', reason(error), deps.fireRisk.source),
+    ),
+    deps.protectedAreas.around(boundingBox(route.points, PROTECTED_AREA_MARGIN_DEGREES)).then(
+      (areas) => scoreProtectedArea(samples, areas, deps.protectedAreas.source),
+      (error): CriterionResult =>
+        unknownCriterion('protectedArea', 'Zones protégées', reason(error), deps.protectedAreas.source),
+    ),
   ])
 
   const water: CriterionResult =
@@ -114,7 +133,7 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
 
   return {
     summary: { distanceKm: lengthM / 1000, ascentM, durationMin, end },
-    score: computeScore([daylight, weather, forecast, water, shelter], profile),
+    score: computeScore([daylight, weather, forecast, water, shelter, fire, protectedArea], profile),
     places: places.found,
   }
 }

@@ -11,7 +11,6 @@ export const TYPE_ICON_PATH: Record<SignalisationType, string> = {
     '<circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M12 1.8v3.2M12 19v3.2M1.8 12h3.2M19 12h3.2"/>',
   troupeau:
     '<circle cx="7" cy="9" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="6.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="17" cy="9" r="1.5" fill="currentColor" stroke="none"/><path d="M12 11c-3 0-5 3-5 5.5 0 1.5 1.3 2 2.5 1.5l2.5-.8 2.5.8c1.2.5 2.5 0 2.5-1.5C17 14 15 11 12 11z"/>',
-  incendie: '<path d="M12 21a6 6 0 0 0 6-6c0-3-2-5-3-7-.5 2-2 3-2 5a2 2 0 0 1-4 0c0-3 2-5 1-8-3 2-4 6-4 10a6 6 0 0 0 6 6z"/>',
   balisage: '<path d="M6 21V4M6 5h11l-2 4 2 4H6"/>',
   brouillard: '<path d="M7 15a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6 1.3A3.4 3.4 0 0 1 17 15z"/><path d="M6 19h12"/>',
   dechets: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/>',
@@ -22,7 +21,7 @@ export const TYPE_ICON_PATH: Record<SignalisationType, string> = {
 /** Forme de statut « attention » : un signalement est par nature un point à surveiller. */
 export const WARNING_ICON_PATH = TYPE_ICON_PATH.eboulis
 
-/** Forme de statut « bloquant » (octogone barré) : danger grave, jamais distingué par la seule couleur. */
+/** Forme de statut « bloquant » (octogone barré) : jamais distingué par la seule couleur. */
 export const CLOSED_STATUS_ICON_PATH = '<path d="M8.5 3h7L21 8.5v7L15.5 21h-7L3 15.5v-7L8.5 3z"/><path d="M6.5 6.5l11 11"/>'
 
 /** Forme de statut « praticable » : cercle avec coche. */

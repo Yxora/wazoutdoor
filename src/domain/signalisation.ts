@@ -7,7 +7,6 @@ export type SignalisationType =
   | 'boue'
   | 'neige'
   | 'eau'
-  | 'incendie'
   | 'chasse'
   | 'troupeau'
   | 'balisage'
@@ -29,7 +28,6 @@ export const SIGNALISATION_TYPE_LABEL: Record<SignalisationType, string> = {
   boue: 'Boue, passage glissant',
   neige: 'Neige, verglas',
   eau: 'Crue, passage d’eau dangereux',
-  incendie: 'Feu de forêt',
   chasse: 'Chasse en cours',
   troupeau: 'Troupeau, patous',
   balisage: 'Balisage absent',
@@ -39,13 +37,6 @@ export const SIGNALISATION_TYPE_LABEL: Record<SignalisationType, string> = {
 }
 
 export const SIGNALISATION_TYPES = Object.keys(SIGNALISATION_TYPE_LABEL) as SignalisationType[]
-
-/** Signalements qui bloquent le passage ou mettent en danger immédiat : affichage distinct (forme ET couleur, jamais la couleur seule). */
-const CRITICAL_SIGNALISATION_TYPES: SignalisationType[] = ['incendie']
-
-export function isCritical(type: SignalisationType): boolean {
-  return CRITICAL_SIGNALISATION_TYPES.includes(type)
-}
 
 const DESCRIPTION_MAX_LENGTH = 280
 

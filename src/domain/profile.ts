@@ -1,6 +1,6 @@
 export type ProfileId = 'randonneur' | 'traileur' | 'vttiste'
 
-export type CriterionId = 'daylight' | 'weather' | 'forecast' | 'water' | 'shelter'
+export type CriterionId = 'daylight' | 'weather' | 'forecast' | 'water' | 'shelter' | 'fire' | 'protectedArea'
 
 /**
  * Hypothèses de travail, pas des valeurs validées : à confronter aux interviews.
@@ -26,7 +26,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     climbMetersPerHour: 600,
     waterGapMaxKm: 10,
     shelterMaxKm: 3,
-    weights: { daylight: 3, weather: 3, forecast: 3, water: 2, shelter: 2 },
+    weights: { daylight: 3, weather: 3, forecast: 3, water: 2, shelter: 2, fire: 3, protectedArea: 2 },
   },
   traileur: {
     id: 'traileur',
@@ -35,7 +35,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     climbMetersPerHour: 900,
     waterGapMaxKm: 12,
     shelterMaxKm: 5,
-    weights: { daylight: 3, weather: 3, forecast: 3, water: 3, shelter: 1 },
+    weights: { daylight: 3, weather: 3, forecast: 3, water: 3, shelter: 1, fire: 3, protectedArea: 2 },
   },
   vttiste: {
     id: 'vttiste',
@@ -44,6 +44,6 @@ export const PROFILES: Record<ProfileId, Profile> = {
     climbMetersPerHour: 500,
     waterGapMaxKm: 15,
     shelterMaxKm: 5,
-    weights: { daylight: 3, weather: 3, forecast: 3, water: 2, shelter: 2 },
+    weights: { daylight: 3, weather: 3, forecast: 3, water: 2, shelter: 2, fire: 3, protectedArea: 2 },
   },
 }

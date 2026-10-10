@@ -50,7 +50,7 @@ Critères du jury : validation marché, business model, exécution (MVP, design)
 
 Priorité retenue dans `guidelines/idees-solutions.md` : une **webapp** pour la démo (carte des imprévus, vérification d'un itinéraire GPX, formulaire de signalement). L'API partenaires et l'app Garmin restent au stade de la présentation ou de la maquette. Viser une démo simple et fiable sur scène plutôt qu'un produit complet.
 
-**État actuel** : prototype du **problème 1** (sortir seul·e sans angoisse). L'utilisateur choisit un profil (randonneur·se, traileur·se, vététiste), une heure de départ et un fichier GPX (ou un exemple Schlucht-Hohneck). Le cas d'usage `evaluateRoute` calcule un **score de sérénité** sur 5 critères, avec le détail, la source et la fraîcheur de chacun :
+**État actuel** : prototype du **problème 1** (sortir seul·e sans angoisse). L'utilisateur choisit un profil (randonneur·se, traileur·se, vététiste), une heure de départ et un fichier GPX (ou un exemple Schlucht-Hohneck). Le cas d'usage `evaluateRoute` calcule un **score de sérénité** sur 7 critères, avec le détail, la source et la fraîcheur de chacun :
 
 | Critère | Source | Adaptateur |
 |---|---|---|
@@ -59,8 +59,10 @@ Priorité retenue dans `guidelines/idees-solutions.md` : une **webapp** pour la 
 | Météo prévue pendant la sortie : pluie, froid, chaleur (canicule), vent, orage, heure par heure sur la durée estimée, corrigée de l'altitude moyenne | Open-Meteo (usage non commercial, jusqu'à 16 jours) | `infra/openMeteoForecast.ts`, règles et seuils dans `domain/forecast.ts` |
 | Points d'eau | refuges.info | `infra/refugesInfoPlaces.ts` |
 | Abris et repli | refuges.info | `infra/refugesInfoPlaces.ts` |
+| Risque d'incendie (feu actif détecté par satellite à moins de 10 km du tracé, sur les 2 derniers jours) | NASA FIRMS, MODIS et VIIRS (clé nécessaire) | `infra/nasaFirmsFireRisk.ts` |
+| Zones protégées (le tracé entre dans une réserve naturelle, un arrêté de protection de biotope ou un parc national) | IGN Géoplateforme, WFS INPN/Patrinat (ouvert, sans clé) | `infra/ignProtectedAreas.ts`, test géométrique dans `domain/protectedArea.ts` |
 
-Une source en échec rend son critère « indisponible » : il est exclu du score et signalé, jamais compté comme favorable. Un score n'est « serein » que s'il n'y a aucune alerte. Les vitesses et seuils par profil (`domain/profile.ts`) sont des **hypothèses**, pas des valeurs validées. Le tracé d'exemple (`ui/samples/hohneck-exemple.gpx`) vient du service d'itinéraire pédestre de l'IGN.
+Une source en échec rend son critère « indisponible » : il est exclu du score et signalé, jamais compté comme favorable. Un score n'est « serein » que s'il n'y a aucune alerte. **Exception : un feu actif détecté près du tracé force le score global à 0**, quels que soient les autres critères (`domain/serenity.ts`, `computeScore`). À l'inverse, une zone protégée traversée ne déclenche qu'un **avertissement** : elle pèse dans la moyenne pondérée comme n'importe quel autre critère, sans forcer le score. Les vitesses et seuils par profil (`domain/profile.ts`) sont des **hypothèses**, pas des valeurs validées. Le tracé d'exemple (`ui/samples/hohneck-exemple.gpx`) vient du service d'itinéraire pédestre de l'IGN.
 
 Sur la carte, chaque catégorie de lieu a une couleur **et** un glyphe différents (point d'eau, cabane non gardée, refuge gardé, gîte d'étape), plus le départ du tracé, avec une légende repliable (`ui/map.ts`). La catégorie (`PlaceCategory`) sert à l'affichage, le rôle (`PlaceKind`, eau ou abri) au calcul du score.
 
@@ -68,7 +70,7 @@ Sur la carte, chaque catégorie de lieu a une couleur **et** un glyphe différen
 
 **Signalisation** : l'utilisateur·rice signale un danger ou un imprévu sur la carte (arbre tombé, chemin fermé...). Domaine `domain/signalisation.ts` (types, criticité, expiration), cas d'usage `reportSignalisation` et `listSignalisations`, port `SignalisationStore`, adaptateurs `infra/supabaseSignalisationStore.ts` (table `signalisations`, migration dans `supabase/migrations/`) et `infra/localSignalisationStore.ts` (repli sans Supabase), vue `ui/signalisationControl.ts` et couche carte dans `ui/map.ts`.
 
-Pas encore fait : chemins de repli par tronçon, fréquentation (aucune source ouverte), zones protégées, déploiement GitLab/GitHub Pages. Overpass (OSM) a été testé mais reste instable : il n'est pas branché.
+Pas encore fait : chemins de repli par tronçon, fréquentation (aucune source ouverte), déploiement GitLab/GitHub Pages. Overpass (OSM) a été testé mais reste instable : il n'est pas branché.
 
 ### Stack
 
@@ -96,4 +98,4 @@ Sens des dépendances : `ui` et `infra` vers `application`, `application` vers `
 
 ### Configuration
 
-Copier `.env.example` vers `.env`. Le score fonctionne sans Supabase. Pour la vigilance météo, ajouter `VITE_METEOFRANCE_API_KEY=` dans `.env` (clé du portail API Météo-France, durée de vie courte, visible dans le navigateur car préfixée `VITE_` : acceptable pour un prototype, pas pour un vrai produit). Sans cette clé, le critère est affiché « indisponible ». Pour le test de connexion Supabase : `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (Project Settings > API). Ne jamais committer `.env`. Ne jamais utiliser la clé `service_role` côté front : seule la clé `anon` est publique, et la sécurité repose sur la RLS activée avec des policies explicites (sans policy, la table paraît vide).
+Copier `.env.example` vers `.env`. Le score fonctionne sans Supabase. Pour la vigilance météo, ajouter `VITE_METEOFRANCE_API_KEY=` dans `.env` (clé du portail API Météo-France, durée de vie courte, visible dans le navigateur car préfixée `VITE_` : acceptable pour un prototype, pas pour un vrai produit). Sans cette clé, le critère est affiché « indisponible ». Pour le risque d'incendie, ajouter `VITE_FIRMS_API_KEY=` (clé gratuite sur [firms.modaps.eosdis.nasa.gov/api/map_key](https://firms.modaps.eosdis.nasa.gov/api/map_key), même limite VITE_ que ci-dessus) : sans clé le critère est « indisponible », avec clé et un feu détecté près du tracé le score passe obligatoirement à 0. Pour le test de connexion Supabase : `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (Project Settings > API). Ne jamais committer `.env`. Ne jamais utiliser la clé `service_role` côté front : seule la clé `anon` est publique, et la sécurité repose sur la RLS activée avec des policies explicites (sans policy, la table paraît vide).
