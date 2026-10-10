@@ -2,6 +2,7 @@ import type { Coordinates } from '../domain/coordinates'
 import type { HourlyForecast } from '../domain/forecast'
 import type { Place } from '../domain/place'
 import type { BoundingBox, Route } from '../domain/route'
+import type { Signalisation } from '../domain/signalisation'
 
 export type LocationResult =
   | { ok: true; position: Coordinates }
@@ -56,4 +57,9 @@ export interface ForecastProvider {
 export interface PlaceProvider {
   readonly source: string
   around(box: BoundingBox): Promise<Place[]>
+}
+
+export interface SignalisationStore {
+  save(signalisation: Signalisation): Promise<void>
+  list(): Promise<Signalisation[]>
 }

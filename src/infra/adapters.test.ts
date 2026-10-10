@@ -4,6 +4,7 @@ import { MeteoFranceVigilance } from './meteoFranceVigilance'
 import { OpenMeteoDaylight } from './openMeteoDaylight'
 import { OpenMeteoForecast } from './openMeteoForecast'
 import { RefugesInfoPlaces } from './refugesInfoPlaces'
+import { SupabaseSignalisationStore } from './supabaseSignalisationStore'
 
 function stubFetch(routes: Record<string, unknown>, status = 200) {
   const calls: { url: string; headers?: HeadersInit }[] = []
@@ -146,6 +147,70 @@ describe('RefugesInfoPlaces', () => {
       ['Refuge du Sommet', 'shelter', 'refuge'],
     ])
     expect(places[0].position).toEqual({ lat: 48.0, lng: 7.0 })
+  })
+})
+
+describe('SupabaseSignalisationStore', () => {
+  const row = {
+    id: 'a1',
+    type: 'arbre',
+    description: 'Travers le chemin',
+    lat: 48.05,
+    lng: 7.02,
+    created_at: '2026-10-10T08:30:00.000Z',
+  }
+
+  it('envoie le signalement au format de la table, avec la clé publique', async () => {
+    const calls: { url: string; init?: RequestInit }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        return new Response(null, { status: 201 })
+      }),
+    )
+
+    const store = new SupabaseSignalisationStore('https://example.supabase.co/', 'anon-key')
+    await store.save({
+      id: 'a1',
+      type: 'arbre',
+      description: 'Travers le chemin',
+      position: { lat: 48.05, lng: 7.02 },
+      createdAt: new Date('2026-10-10T08:30:00.000Z'),
+    })
+
+    expect(calls[0].url).toBe('https://example.supabase.co/rest/v1/signalisations')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(calls[0].init?.headers).toMatchObject({ apikey: 'anon-key', Authorization: 'Bearer anon-key' })
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual(row)
+  })
+
+  it('signale un échec HTTP à la sauvegarde', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 401 })),
+    )
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key')
+    await expect(
+      store.save({ id: 'a1', type: 'arbre', description: '', position: { lat: 48, lng: 7 }, createdAt: new Date() }),
+    ).rejects.toThrow(/HTTP 401/)
+  })
+
+  it('relit les signalements et reconstruit la position et la date', async () => {
+    const calls = stubFetch({ 'rest/v1/signalisations': [row] })
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key')
+    const result = await store.list()
+
+    expect(result).toEqual([
+      {
+        id: 'a1',
+        type: 'arbre',
+        description: 'Travers le chemin',
+        position: { lat: 48.05, lng: 7.02 },
+        createdAt: new Date('2026-10-10T08:30:00.000Z'),
+      },
+    ])
+    expect(calls[0].url).toContain('order=created_at.desc')
   })
 })
 

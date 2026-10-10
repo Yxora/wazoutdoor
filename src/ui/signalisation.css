@@ -1,0 +1,281 @@
+/* Composants od-* : bouton Signaler, feuilles et contrôles associés. Chart WazeOutdoor. */
+
+.od-fab {
+  position: fixed;
+  z-index: 1000;
+  right: var(--od-space-4);
+  bottom: var(--od-space-4);
+  width: 64px;
+  height: 64px;
+  box-sizing: border-box;
+  border: 4px solid var(--od-surface-raised);
+  border-radius: var(--od-radius-pill);
+  background: var(--od-brand);
+  color: var(--od-ink-inverse);
+  box-shadow: 0 6px 18px rgb(27 36 32 / 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.od-fab:hover {
+  background: var(--od-brand-pressed);
+}
+
+.od-fab:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.od-fab:focus-visible,
+.od-button:focus-visible,
+.od-tile:focus-visible,
+.od-textarea:focus-visible,
+.od-sheet__close:focus-visible {
+  outline: none;
+  box-shadow: var(--od-focus-ring);
+}
+
+@media (max-width: 600px) {
+  .od-fab {
+    bottom: calc(55vh + var(--od-space-4));
+  }
+}
+
+.od-backdrop {
+  position: fixed;
+  z-index: 2000;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(27 36 32 / 0.5);
+}
+
+.od-sheet {
+  display: grid;
+  gap: var(--od-space-4);
+  width: min(440px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  margin: 0 0 0;
+  padding: var(--od-space-2) var(--od-space-4) var(--od-space-6);
+  background: var(--od-surface-raised);
+  color: var(--od-ink);
+  border-radius: var(--od-radius-lg) var(--od-radius-lg) 0 0;
+  box-shadow: var(--od-shadow-sheet);
+}
+
+@media (min-width: 601px) {
+  .od-backdrop {
+    align-items: center;
+  }
+
+  .od-sheet {
+    border-radius: var(--od-radius-lg);
+    margin-bottom: var(--od-space-6);
+  }
+}
+
+.od-sheet__handle {
+  justify-self: center;
+  width: 44px;
+  height: 5px;
+  border-radius: var(--od-radius-sm);
+  background: var(--od-line);
+}
+
+.od-sheet__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--od-space-3);
+}
+
+.od-sheet__heading {
+  display: grid;
+  gap: var(--od-space-1);
+  min-width: 0;
+}
+
+.od-sheet__title {
+  margin: 0;
+  font: var(--od-title-1);
+}
+
+.od-sheet__subtitle {
+  margin: 0;
+  font: var(--od-body);
+  color: var(--od-ink-muted);
+}
+
+.od-sheet__close {
+  flex: none;
+  width: var(--od-size-touch);
+  height: var(--od-size-touch);
+  border: none;
+  border-radius: var(--od-radius-pill);
+  background: var(--od-surface);
+  color: var(--od-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.od-sheet__form {
+  display: contents;
+}
+
+.od-field {
+  display: grid;
+  gap: var(--od-space-2);
+}
+
+.od-field__label {
+  font: var(--od-label);
+}
+
+.od-textarea {
+  font: var(--od-body);
+  color: var(--od-ink);
+  background: var(--od-surface-raised);
+  border: 1px solid var(--od-line);
+  border-radius: var(--od-radius-md);
+  padding: var(--od-space-3);
+  min-height: var(--od-size-touch);
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: var(--od-font-text);
+}
+
+.od-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--od-space-2);
+}
+
+.od-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--od-space-2);
+  height: 92px;
+  box-sizing: border-box;
+  padding: var(--od-space-2);
+  border: 2px solid var(--od-line);
+  border-radius: var(--od-radius-md);
+  background: var(--od-surface-raised);
+  color: var(--od-ink);
+  font: var(--od-caption);
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+
+.od-tile[aria-pressed='true'] {
+  border-color: var(--od-accent);
+  background: var(--od-accent-soft);
+}
+
+.od-tile__icon {
+  width: var(--od-size-icon);
+  height: var(--od-size-icon);
+}
+
+.od-info-row {
+  display: flex;
+  align-items: center;
+  gap: var(--od-space-3);
+  padding: var(--od-space-3);
+  border-radius: var(--od-radius-md);
+  background: var(--od-surface);
+  border: 1px solid var(--od-line);
+}
+
+.od-info-row__icon {
+  flex: none;
+  width: var(--od-size-icon);
+  height: var(--od-size-icon);
+  color: var(--od-ink-muted);
+}
+
+.od-info-row__text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.od-info-row__title {
+  font: var(--od-label);
+}
+
+.od-info-row__detail {
+  font: var(--od-caption);
+  color: var(--od-ink-muted);
+}
+
+.od-actions {
+  display: grid;
+  gap: var(--od-space-2);
+}
+
+.od-button {
+  font: var(--od-label);
+  min-height: var(--od-size-touch);
+  padding: 0 var(--od-space-4);
+  border: none;
+  border-radius: var(--od-radius-md);
+  cursor: pointer;
+}
+
+.od-button--primary {
+  background: var(--od-brand);
+  color: var(--od-ink-inverse);
+}
+
+.od-button--primary:hover {
+  background: var(--od-brand-pressed);
+}
+
+.od-button--primary:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.od-error {
+  margin: 0;
+  font: var(--od-caption);
+  color: var(--od-status-closed);
+}
+
+/* Pastille de danger sur la carte : forme + couleur de statut « attention », jamais la couleur seule. */
+.od-pin {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: var(--od-size-pin);
+  height: var(--od-size-pin);
+  border-radius: var(--od-radius-pill);
+  background: var(--od-surface-raised);
+  color: var(--od-status-warn);
+  border: 3px solid var(--od-surface-raised);
+  box-shadow: var(--od-shadow-control);
+}
+
+.od-pin--legend {
+  width: 28px;
+  height: 28px;
+}
+
+.od-pin--critical {
+  color: var(--od-status-closed);
+}
+
+.od-popup {
+  font: var(--od-body);
+  color: var(--od-ink);
+}

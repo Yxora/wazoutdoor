@@ -3,6 +3,8 @@ import 'leaflet/dist/leaflet.css'
 import type { Coordinates } from '../domain/coordinates'
 import { PLACE_CATEGORY_LABEL, type Place, type PlaceCategory } from '../domain/place'
 import type { Route } from '../domain/route'
+import { isCritical, SIGNALISATION_TYPE_LABEL, type Signalisation } from '../domain/signalisation'
+import { CLOSED_STATUS_ICON_PATH, odIcon, WARNING_ICON_PATH } from './signalisationIcons'
 
 // Centre des Vosges, cible de départ du projet
 const VOSGES: L.LatLngTuple = [48.0, 7.0]
@@ -21,7 +23,7 @@ const GLYPH = {
   flag: '<path d="M6 3h2v18H6V3zm2 1h10l-2.5 4 2.5 4H8V4z"/>',
 } as const
 
-interface MarkerStyle {
+export interface MarkerStyle {
   label: string
   color: string
   glyph: string
@@ -38,14 +40,37 @@ const CATEGORY_STYLE: Record<PlaceCategory, MarkerStyle> = {
 
 const LEGEND_CATEGORIES: PlaceCategory[] = ['water', 'hut', 'refuge', 'lodge']
 
-/** Pastille ronde colorée contenant un glyphe. Même rendu sur la carte et dans la légende. */
-function badge(style: MarkerStyle): HTMLElement {
+/** Pastille ronde colorée contenant un glyphe. Même rendu sur la carte, dans la légende et dans le formulaire. */
+export function badge(style: MarkerStyle): HTMLElement {
   const element = document.createElement('span')
   element.className = 'map-badge'
   element.style.background = style.color
   // Contenu statique défini dans ce fichier, jamais issu d'une source externe
   element.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="currentColor">${style.glyph}</svg>`
   return element
+}
+
+/**
+ * Pastille « danger signalé » : forme de statut, jamais la couleur seule. Chart WazeOutdoor.
+ * Attention (triangle, orange) pour la plupart des signalements, bloquant (octogone barré, rouge)
+ * pour les dangers graves (ex. feu de forêt).
+ */
+function dangerPinBadge(critical: boolean, legend = false): HTMLElement {
+  const element = document.createElement('span')
+  const modifier = critical ? 'od-pin--critical' : ''
+  element.className = [legend ? 'od-pin od-pin--legend' : 'od-pin', modifier].filter(Boolean).join(' ')
+  element.append(odIcon(critical ? CLOSED_STATUS_ICON_PATH : WARNING_ICON_PATH, legend ? 16 : 20))
+  return element
+}
+
+function dangerPinIcon(signalisation: Signalisation): L.DivIcon {
+  return L.divIcon({
+    html: dangerPinBadge(isCritical(signalisation.type)),
+    className: 'map-marker',
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+    popupAnchor: [0, -20],
+  })
 }
 
 function markerIcon(style: MarkerStyle): L.DivIcon {
@@ -93,6 +118,8 @@ function addLegend(map: L.Map): void {
       legendRow(badge(START_STYLE), START_STYLE.label),
       ...LEGEND_CATEGORIES.map((category) => legendRow(badge(CATEGORY_STYLE[category]), CATEGORY_STYLE[category].label)),
       legendRow(dot, 'Votre position'),
+      legendRow(dangerPinBadge(false, true), 'Danger signalé'),
+      legendRow(dangerPinBadge(true, true), 'Danger grave (ex. feu de forêt)'),
     )
 
     box.append(summary, list)
@@ -178,3 +205,54 @@ export function createRouteLayers(map: L.Map): RouteLayers {
     },
   }
 }
+
+const relativeTime = new Intl.RelativeTimeFormat('fr-FR', { numeric: 'auto' })
+
+function relativeTimeLabel(date: Date): string {
+  const diffMin = Math.round((date.getTime() - Date.now()) / 60_000)
+  if (diffMin === 0) return 'à l’instant'
+  if (Math.abs(diffMin) < 60) return relativeTime.format(diffMin, 'minute')
+  const diffHour = Math.round(diffMin / 60)
+  if (Math.abs(diffHour) < 24) return relativeTime.format(diffHour, 'hour')
+  return relativeTime.format(Math.round(diffHour / 24), 'day')
+}
+
+function signalisationPopup(signalisation: Signalisation): HTMLElement {
+  const box = document.createElement('div')
+  box.className = 'od-popup'
+  const title = document.createElement('strong')
+  title.textContent = SIGNALISATION_TYPE_LABEL[signalisation.type]
+  box.append(title)
+  if (signalisation.description) box.append(document.createElement('br'), signalisation.description)
+  box.append(document.createElement('br'), `Signalé ${relativeTimeLabel(signalisation.createdAt)}`)
+  return box
+}
+
+export interface SignalisationLayer {
+  show(signalisations: Signalisation[]): void
+  add(signalisation: Signalisation): void
+}
+
+export function createSignalisationLayer(map: L.Map): SignalisationLayer {
+  const layer = L.layerGroup().addTo(map)
+
+  const markerFor = (signalisation: Signalisation) => {
+    const label = SIGNALISATION_TYPE_LABEL[signalisation.type]
+    return L.marker([signalisation.position.lat, signalisation.position.lng], {
+      icon: dangerPinIcon(signalisation),
+      title: label,
+      alt: label,
+    }).bindPopup(signalisationPopup(signalisation))
+  }
+
+  return {
+    show(signalisations) {
+      layer.clearLayers()
+      for (const signalisation of signalisations) markerFor(signalisation).addTo(layer)
+    },
+    add(signalisation) {
+      markerFor(signalisation).addTo(layer)
+    },
+  }
+}
+
