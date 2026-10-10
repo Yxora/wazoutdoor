@@ -4,13 +4,16 @@ import { evaluateRoute } from './application/evaluateRoute'
 import { PROFILES } from './domain/profile'
 import { GpxRouteParser } from './infra/gpxRouteParser'
 import { IgnElevation } from './infra/ignElevation'
+import { IgnProtectedAreas } from './infra/ignProtectedAreas'
 import { MeteoFranceVigilance } from './infra/meteoFranceVigilance'
+import { NasaFirmsFireRisk } from './infra/nasaFirmsFireRisk'
 import { OpenMeteoDaylight } from './infra/openMeteoDaylight'
 import { OpenMeteoForecast } from './infra/openMeteoForecast'
 import { RefugesInfoPlaces } from './infra/refugesInfoPlaces'
 
 // Appels réels aux API publiques. Lancer avec : RUN_LIVE=1 npm test
 // Clé Météo-France facultative : METEOFRANCE_KEY=... (sinon ce critère est « indisponible »)
+// Clé NASA FIRMS facultative : FIRMS_KEY=... (sinon ce critère est « indisponible »)
 describe.skipIf(!process.env.RUN_LIVE)('chaîne complète sur des données réelles', () => {
   it('évalue le tracé d’exemple des Vosges', async () => {
     const gpx = readFileSync('src/ui/samples/hohneck-exemple.gpx', 'utf8')
@@ -25,6 +28,8 @@ describe.skipIf(!process.env.RUN_LIVE)('chaîne complète sur des données réel
         weather: new MeteoFranceVigilance(process.env.METEOFRANCE_KEY),
         forecast: new OpenMeteoForecast(),
         places: new RefugesInfoPlaces(),
+        fireRisk: new NasaFirmsFireRisk(process.env.FIRMS_KEY),
+        protectedAreas: new IgnProtectedAreas(),
       },
       { route, profile: PROFILES.randonneur, start },
     )

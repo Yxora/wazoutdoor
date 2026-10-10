@@ -1,4 +1,8 @@
+import type { FireDetection } from './fire'
 import type { Place } from './place'
+import { DEFAULT_PREFERENCES, type CriterionId, type CriterionMode, type CriterionPreferences, type Profile } from './profile'
+import { isPointInProtectedArea, type ProtectedArea } from './protectedArea'
+import { distanceMeters, type SampledPoint } from './route'
 import {
   DEFAULT_SIGNALISATION_PREFERENCES,
   reachMeters,
@@ -7,8 +11,6 @@ import {
   type Signalisation,
   type SignalisationPreferences,
 } from './signalisation'
-import { DEFAULT_PREFERENCES, type CriterionId, type CriterionMode, type CriterionPreferences, type Profile } from './profile'
-import { distanceMeters, type SampledPoint } from './route'
 
 export type CriterionStatus = 'ok' | 'warning' | 'alert' | 'unknown'
 
@@ -153,6 +155,76 @@ export function scoreShelter(samples: SampledPoint[], shelters: Place[], profile
   return { ...base, status: 'alert', score: 20, detail }
 }
 
+const FIRE_REACH_KM = 10
+const FIRE_LOOKBACK_DAYS = 2
+
+/** Distance du foyer actif le plus proche, en km, ou null si aucune détection sur le tracé */
+function nearestFireKm(samples: SampledPoint[], detections: FireDetection[]): number | null {
+  let nearestKm = Infinity
+  for (const detection of detections) {
+    for (const sample of samples) {
+      const km = distanceMeters(sample, detection.position) / 1000
+      if (km < nearestKm) nearestKm = km
+    }
+  }
+  return Number.isFinite(nearestKm) ? nearestKm : null
+}
+
+export function scoreFire(
+  samples: SampledPoint[],
+  detections: FireDetection[],
+  source: string,
+  updatedAt?: Date,
+): CriterionResult {
+  const base = { id: 'fire' as const, label: 'Risque d’incendie', source, updatedAt }
+  const nearestKm = nearestFireKm(samples, detections)
+
+  if (nearestKm === null || nearestKm > FIRE_REACH_KM) {
+    return {
+      ...base,
+      status: 'ok',
+      score: 100,
+      detail: `Aucun feu actif détecté par satellite (MODIS/VIIRS) à moins de ${FIRE_REACH_KM} km du tracé, sur les ${FIRE_LOOKBACK_DAYS} derniers jours.`,
+    }
+  }
+
+  const nearby = detections.filter((d) => samples.some((s) => distanceMeters(s, d.position) / 1000 <= FIRE_REACH_KM))
+  return {
+    ...base,
+    status: 'alert',
+    score: 0,
+    detail: `${nearby.length} détection(s) satellite de feu actif (MODIS/VIIRS) à moins de ${FIRE_REACH_KM} km du tracé, la plus proche à ${nearestKm.toFixed(1)} km. Itinéraire déconseillé : vérifiez les fermetures et consignes officielles avant de partir.`,
+  }
+}
+
+export function scoreProtectedArea(samples: SampledPoint[], areas: ProtectedArea[], source: string): CriterionResult {
+  const base = { id: 'protectedArea' as const, label: 'Zones protégées', source }
+  const entered = areas.filter((area) => samples.some((s) => isPointInProtectedArea(s, area)))
+
+  if (entered.length === 0) {
+    return {
+      ...base,
+      status: 'ok',
+      score: 100,
+      detail: 'Le tracé ne traverse aucune zone protégée répertoriée (réserve naturelle, arrêté de biotope, parc national).',
+    }
+  }
+
+  const facets: Facet[] = entered.map((area) => ({
+    label: area.category,
+    status: 'warning',
+    detail: area.url ? `${area.name} — ${area.url}` : area.name,
+  }))
+
+  return {
+    ...base,
+    status: 'warning',
+    score: 60,
+    detail: `Le tracé traverse ${entered.length} zone(s) protégée(s). Attention à la réglementation en vigueur (sentiers balisés, périodes de quiétude, cueillette, chiens...).`,
+    facets,
+  }
+}
+
 function formatDistance(meters: number): string {
   return meters >= 1000 ? `${(meters / 1000).toFixed(1).replace('.', ',')} km` : `${Math.round(meters / 10) * 10} m`
 }
@@ -216,7 +288,12 @@ export function computeScore(
   profile: Profile,
   preferences: CriterionPreferences = DEFAULT_PREFERENCES,
 ): SerenityScore {
-  const criteria = results.map((c) => ({ ...c, mode: preferences[c.id] }))
+  const criteria = results.map((c) => ({
+    ...c,
+    // Le risque d'incendie reste éliminatoire quelles que soient les préférences : non négociable,
+    // l'utilisateur ne peut pas le désactiver ni l'affaiblir (voir domain/profile.ts, DEFAULT_PREFERENCES).
+    mode: c.id === 'fire' ? ('veto' as const) : preferences[c.id],
+  }))
   const counted = criteria.filter((c) => c.mode !== 'ignore')
   const available = counted.filter((c): c is typeof c & { score: number } => c.score !== null)
   const weightSum = available.reduce((sum, c) => sum + profile.weights[c.id], 0)

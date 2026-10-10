@@ -11,9 +11,11 @@ import { BrowserGeolocator } from './infra/browserGeolocator'
 import { FixedGeolocator, positionFromSearch } from './infra/fixedGeolocator'
 import { GpxRouteParser } from './infra/gpxRouteParser'
 import { IgnElevation } from './infra/ignElevation'
+import { IgnProtectedAreas } from './infra/ignProtectedAreas'
 import { LocalSignalisationStore } from './infra/localSignalisationStore'
 import { LocalUserStore } from './infra/localUserStore'
 import { MeteoFranceVigilance } from './infra/meteoFranceVigilance'
+import { NasaFirmsFireRisk } from './infra/nasaFirmsFireRisk'
 import { OpenMeteoDaylight } from './infra/openMeteoDaylight'
 import { OpenMeteoForecast } from './infra/openMeteoForecast'
 import { RefugesInfoPlaces } from './infra/refugesInfoPlaces'
@@ -46,6 +48,8 @@ const deps: EvaluationDeps = {
   weather: new MeteoFranceVigilance(import.meta.env.VITE_METEOFRANCE_API_KEY),
   forecast: new OpenMeteoForecast(),
   places: new RefugesInfoPlaces(),
+  fireRisk: new NasaFirmsFireRisk(import.meta.env.VITE_FIRMS_API_KEY),
+  protectedAreas: new IgnProtectedAreas(),
   signalisations: signalisationStore,
 }
 

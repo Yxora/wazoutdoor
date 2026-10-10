@@ -7,6 +7,8 @@ import { isCritical, SIGNALISATION_TYPE_LABEL, type Signalisation, type Signalis
 import { pictoIcon } from './pictos'
 import { CLOSED_STATUS_ICON_PATH, odIcon, WARNING_ICON_PATH } from './signalisationIcons'
 import logoUrl from './assets/logo.svg'
+import { SIGNALISATION_TYPE_LABEL, type Signalisation } from '../domain/signalisation'
+import { odIcon, WARNING_ICON_PATH } from './signalisationIcons'
 
 // Centre des Vosges, cible de départ du projet
 const VOSGES: L.LatLngTuple = [48.0, 7.0]
@@ -53,6 +55,8 @@ export function badge(style: MarkerStyle): HTMLElement {
   return element
 }
 
+/** Pastille « danger signalé » : forme de statut (triangle), jamais la couleur seule. Chart WazeOutdoor. */
+function dangerPinBadge(legend = false): HTMLElement {
 /**
  * Pastille « danger signalé » : le picto dit quoi (planche des pictos d'imprévus), la gravité reste portée par une forme de statut
  * en coin, jamais par la couleur seule. Attention (triangle, orange) pour la plupart des signalements, bloquant (octogone barré,
@@ -61,6 +65,8 @@ export function badge(style: MarkerStyle): HTMLElement {
 function dangerPinBadge(type: SignalisationType, legend = false, redFlag = false): HTMLElement {
   const critical = isCritical(type)
   const element = document.createElement('span')
+  element.className = legend ? 'od-pin od-pin--legend' : 'od-pin'
+  element.append(odIcon(WARNING_ICON_PATH, legend ? 16 : 20))
   const modifier = critical ? 'od-pin--critical' : ''
   const wave = redFlag ? 'od-pin--redflag' : ''
   element.className = [legend ? 'od-pin od-pin--legend' : 'od-pin', modifier, wave].filter(Boolean).join(' ')
@@ -71,8 +77,10 @@ function dangerPinBadge(type: SignalisationType, legend = false, redFlag = false
   return element
 }
 
+function dangerPinIcon(): L.DivIcon {
 function dangerPinIcon(signalisation: Signalisation, redFlag: boolean): L.DivIcon {
   return L.divIcon({
+    html: dangerPinBadge(),
     html: dangerPinBadge(signalisation.type, false, redFlag),
     className: 'map-marker',
     iconSize: [40, 40],
@@ -126,6 +134,7 @@ function addLegend(map: L.Map): void {
       legendRow(dot, 'Votre position'),
       legendRow(dangerPinBadge('arbre', true), 'Danger signalé (le picto dit lequel)'),
       legendRow(dangerPinBadge('incendie', true), 'Danger grave (ex. feu de forêt)'),
+      legendRow(dangerPinBadge(true), 'Danger signalé'),
     )
 
     box.append(summary, list)
@@ -298,6 +307,8 @@ export function createSignalisationLayer(map: L.Map): SignalisationLayer {
 
   const markerFor = (signalisation: Signalisation, position: L.LatLng) => {
     const label = SIGNALISATION_TYPE_LABEL[signalisation.type]
+    return L.marker([signalisation.position.lat, signalisation.position.lng], {
+      icon: dangerPinIcon(),
     return L.marker(position, {
       icon: dangerPinIcon(signalisation, redFlags.has(signalisation.type)),
       title: label,

@@ -1,6 +1,8 @@
 import type { Coordinates } from '../domain/coordinates'
+import type { FireDetection } from '../domain/fire'
 import type { HourlyForecast } from '../domain/forecast'
 import type { Place } from '../domain/place'
+import type { ProtectedArea } from '../domain/protectedArea'
 import type { BoundingBox, Route } from '../domain/route'
 import type { Signalisation } from '../domain/signalisation'
 import type { User } from '../domain/user'
@@ -58,6 +60,17 @@ export interface ForecastProvider {
 export interface PlaceProvider {
   readonly source: string
   around(box: BoundingBox): Promise<Place[]>
+}
+
+export interface FireRiskProvider {
+  readonly source: string
+  /** Détections actives (MODIS/VIIRS) dans la zone, sur les derniers jours */
+  around(box: BoundingBox): Promise<FireDetection[]>
+}
+
+export interface ProtectedAreaProvider {
+  readonly source: string
+  around(box: BoundingBox): Promise<ProtectedArea[]>
 }
 
 export interface SignalisationStore {

@@ -8,7 +8,6 @@ export type SignalisationType =
   | 'boue'
   | 'neige'
   | 'eau'
-  | 'incendie'
   | 'chasse'
   | 'troupeau'
   | 'balisage'
@@ -30,7 +29,6 @@ export const SIGNALISATION_TYPE_LABEL: Record<SignalisationType, string> = {
   boue: 'Boue, passage glissant',
   neige: 'Neige, verglas',
   eau: 'Crue, passage d’eau dangereux',
-  incendie: 'Feu de forêt',
   chasse: 'Chasse en cours',
   troupeau: 'Troupeau, patous',
   balisage: 'Balisage absent',
@@ -48,8 +46,12 @@ export const DEFAULT_SIGNALISATION_PREFERENCES = Object.fromEntries(
   SIGNALISATION_TYPES.map((type) => [type, 'impact']),
 ) as SignalisationPreferences
 
-/** Types pris en compte dans le score et réglables par l'utilisateur. Le feu de forêt reste signalable et visible sur la carte, mais n'entre pas dans le score. */
-export const SCORED_SIGNALISATION_TYPES: SignalisationType[] = SIGNALISATION_TYPES.filter((type) => type !== 'incendie')
+/**
+ * Types pris en compte dans le critère « Signalements » et réglables par l'utilisateur. Le feu de
+ * forêt n'est plus un type de signalement manuel : il est mesuré en continu par satellite (NASA
+ * FIRMS, voir `domain/fire.ts` et le critère `fire`), donc tous les types restants comptent.
+ */
+export const SCORED_SIGNALISATION_TYPES: SignalisationType[] = SIGNALISATION_TYPES
 
 /** Rayon autour du tracé dans lequel un signalement compte, par défaut. Hypothèse de travail, à valider. */
 export const DEFAULT_REACH_M = 150
@@ -61,13 +63,6 @@ const REACH_M_BY_TYPE: Partial<Record<SignalisationType, number>> = {
 
 export function reachMeters(type: SignalisationType): number {
   return REACH_M_BY_TYPE[type] ?? DEFAULT_REACH_M
-}
-
-/** Signalements qui bloquent le passage ou mettent en danger immédiat : affichage distinct (forme ET couleur, jamais la couleur seule). */
-const CRITICAL_SIGNALISATION_TYPES: SignalisationType[] = ['incendie']
-
-export function isCritical(type: SignalisationType): boolean {
-  return CRITICAL_SIGNALISATION_TYPES.includes(type)
 }
 
 const DESCRIPTION_MAX_LENGTH = 280

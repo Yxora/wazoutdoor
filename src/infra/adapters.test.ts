@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { IgnElevation } from './ignElevation'
+import { IgnProtectedAreas } from './ignProtectedAreas'
 import { MeteoFranceVigilance } from './meteoFranceVigilance'
+import { NasaFirmsFireRisk } from './nasaFirmsFireRisk'
 import { OpenMeteoDaylight } from './openMeteoDaylight'
 import { OpenMeteoForecast } from './openMeteoForecast'
 import { RefugesInfoPlaces } from './refugesInfoPlaces'
@@ -147,6 +149,132 @@ describe('RefugesInfoPlaces', () => {
       ['Refuge du Sommet', 'shelter', 'refuge'],
     ])
     expect(places[0].position).toEqual({ lat: 48.0, lng: 7.0 })
+  })
+})
+
+describe('NasaFirmsFireRisk', () => {
+  const box = { west: 6.9, south: 47.9, east: 7.4, north: 48.4 }
+  const modisCsv =
+    'latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,confidence,version,bright_t31,frp,daynight\n' +
+    '48.05,7.02,310.5,1.0,1.0,2026-10-10,1320,Terra,78,6.03,290.1,15.2,D'
+  const viirsCsv =
+    'latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight\n' +
+    '48.06,7.03,330.2,0.4,0.4,2026-10-10,1325,N,VIIRS,h,2.0NRT,295.3,5.4,D\n' +
+    '48.07,7.04,310.0,0.4,0.4,2026-10-10,1325,N,VIIRS,l,2.0NRT,290.0,2.1,D'
+
+  function stubFirms(bodies: { modis?: string; viirs?: string }, status = 200) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/MODIS_NRT/')) return new Response(bodies.modis ?? '', { status })
+        if (url.includes('/VIIRS_SNPP_NRT/')) return new Response(bodies.viirs ?? '', { status })
+        return new Response('not found', { status: 404 })
+      }),
+    )
+  }
+
+  it('fusionne MODIS et VIIRS et écarte les détections à confiance basse', async () => {
+    stubFirms({ modis: modisCsv, viirs: viirsCsv })
+    const detections = await new NasaFirmsFireRisk('clé').around(box)
+    expect(detections).toHaveLength(2)
+    expect(detections.map((d) => d.confidence)).toEqual(['nominal', 'high'])
+    expect(detections[1].position).toEqual({ lat: 48.06, lng: 7.03 })
+    expect(detections[1].acquiredAt.toISOString()).toBe('2026-10-10T13:25:00.000Z')
+  })
+
+  it('refuse l’absence de clé', async () => {
+    stubFirms({ modis: modisCsv, viirs: viirsCsv })
+    await expect(new NasaFirmsFireRisk(undefined).around(box)).rejects.toThrow(/clé API NASA FIRMS absente/)
+  })
+
+  it('signale une clé refusée (réponse sans en-tête CSV)', async () => {
+    stubFirms({ modis: 'Invalid MAP_KEY', viirs: viirsCsv })
+    await expect(new NasaFirmsFireRisk('mauvaise-clé').around(box)).rejects.toThrow(/Invalid MAP_KEY/)
+  })
+
+  it('n’a aucune détection quand seul l’en-tête est renvoyé', async () => {
+    const header = modisCsv.split('\n')[0]
+    stubFirms({ modis: header, viirs: header })
+    const detections = await new NasaFirmsFireRisk('clé').around(box)
+    expect(detections).toEqual([])
+  })
+})
+
+describe('IgnProtectedAreas', () => {
+  const box = { west: 6.9, south: 47.9, east: 7.4, north: 48.4 }
+
+  function stubWfs(featuresByLayer: Record<string, unknown[]>, status = 200) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const key = Object.keys(featuresByLayer).find((k) => url.includes(k))
+        if (!key) return new Response(JSON.stringify({ features: [] }), { status: 200 })
+        return new Response(JSON.stringify({ features: featuresByLayer[key] }), { status })
+      }),
+    )
+  }
+
+  it('convertit une entité GeoJSON Polygon en zone protégée', async () => {
+    stubWfs({
+      patrinat_rnn: [
+        {
+          properties: {
+            nom_site: 'Massif Du Ventron',
+            url_fiche: 'https://inpn.mnhn.fr/espace/protege/FR3600095',
+            gest_site: 'PNR Ballons des Vosges',
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [7.0, 48.0],
+                [7.1, 48.0],
+                [7.1, 48.1],
+                [7.0, 48.1],
+                [7.0, 48.0],
+              ],
+            ],
+          },
+        },
+      ],
+    })
+    const areas = await new IgnProtectedAreas().around(box)
+    expect(areas).toHaveLength(1)
+    expect(areas[0]).toMatchObject({
+      name: 'Massif Du Ventron',
+      category: 'Réserve naturelle nationale',
+      url: 'https://inpn.mnhn.fr/espace/protege/FR3600095',
+      manager: 'PNR Ballons des Vosges',
+    })
+    expect(areas[0].polygons[0][0][0]).toEqual({ lat: 48.0, lng: 7.0 })
+  })
+
+  it('convertit une géométrie MultiPolygon et retombe sur la catégorie sans nom de site', async () => {
+    stubWfs({
+      patrinat_apb: [
+        {
+          properties: {},
+          geometry: {
+            type: 'MultiPolygon',
+            coordinates: [[[[7.0, 48.0], [7.1, 48.0], [7.1, 48.1], [7.0, 48.0]]]],
+          },
+        },
+      ],
+    })
+    const areas = await new IgnProtectedAreas().around(box)
+    const apb = areas.find((a) => a.category === 'Arrêté de protection de biotope')
+    expect(apb?.name).toBe('Arrêté de protection de biotope')
+    expect(apb?.polygons).toHaveLength(1)
+  })
+
+  it('signale un échec HTTP sur une des couches interrogées', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('patrinat_rnn') ? new Response('', { status: 500 }) : new Response(JSON.stringify({ features: [] })),
+      ),
+    )
+    await expect(new IgnProtectedAreas().around(box)).rejects.toThrow(/HTTP 500/)
   })
 })
 

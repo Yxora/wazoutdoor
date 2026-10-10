@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createSignalisation, isCritical, isExpired, SIGNALISATION_TYPE_LABEL, SIGNALISATION_TYPES } from './signalisation'
+import { createSignalisation, isExpired, SIGNALISATION_TYPE_LABEL, SIGNALISATION_TYPES } from './signalisation'
 
 const POSITION = { lat: 48.05, lng: 7.02 }
 
@@ -28,17 +28,6 @@ describe('createSignalisation', () => {
     for (const type of SIGNALISATION_TYPES) {
       expect(SIGNALISATION_TYPE_LABEL[type]).toBeTruthy()
     }
-  })
-})
-
-describe('isCritical', () => {
-  it('signale un feu de forêt comme critique', () => {
-    expect(isCritical('incendie')).toBe(true)
-  })
-
-  it("ne signale pas les autres types comme critiques", () => {
-    expect(isCritical('dechets')).toBe(false)
-    expect(isCritical('arbre')).toBe(false)
   })
 })
 

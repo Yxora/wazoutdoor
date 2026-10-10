@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { Place } from './place'
-import { DEFAULT_SIGNALISATION_PREFERENCES, type Signalisation } from './signalisation'
 import { DEFAULT_PREFERENCES, PROFILES } from './profile'
+import type { ProtectedArea } from './protectedArea'
 import { sampleRoute } from './route'
+import { DEFAULT_SIGNALISATION_PREFERENCES, type Signalisation } from './signalisation'
 import {
   computeScore,
   estimateDurationMinutes,
   formatDuration,
   scoreDaylight,
+  scoreFire,
+  scoreProtectedArea,
   scoreShelter,
   scoreSignalisations,
   scoreWater,
@@ -119,9 +122,64 @@ describe('scoreShelter', () => {
   })
 })
 
-const weatherOk = scoreWeather(1, '88', 's')
+describe('scoreFire', () => {
+  it('est ok sans détection à proximité du tracé', () => {
+    const result = scoreFire(longLine, [], 's')
+    expect(result.status).toBe('ok')
+    expect(result.score).toBe(100)
+  })
+
+  it('ignore une détection trop éloignée du tracé', () => {
+    const far = [{ position: { lat: 48.1, lng: 7.5 }, acquiredAt: new Date(), confidence: 'high' as const, frp: 1, satellite: 'N' }]
+    expect(scoreFire(longLine, far, 's').status).toBe('ok')
+  })
+
+  it('alerte et met le score à 0 quand un feu est détecté près du tracé', () => {
+    const near = [{ position: { lat: 48.1, lng: 7 }, acquiredAt: new Date(), confidence: 'high' as const, frp: 20, satellite: 'N' }]
+    const result = scoreFire(longLine, near, 's')
+    expect(result.status).toBe('alert')
+    expect(result.score).toBe(0)
+    expect(result.detail).toContain('1 détection')
+  })
+})
+
+function squareAround(centerLat: number): ProtectedArea {
+  return {
+    name: 'Réserve test',
+    category: 'Réserve naturelle nationale',
+    url: 'https://inpn.mnhn.fr/test',
+    polygons: [
+      [
+        [
+          { lat: centerLat - 0.01, lng: 6.99 },
+          { lat: centerLat - 0.01, lng: 7.01 },
+          { lat: centerLat + 0.01, lng: 7.01 },
+          { lat: centerLat + 0.01, lng: 6.99 },
+          { lat: centerLat - 0.01, lng: 6.99 },
+        ],
+      ],
+    ],
+  }
+}
+
+describe('scoreProtectedArea', () => {
+  it('est ok quand le tracé ne traverse aucune zone protégée', () => {
+    const result = scoreProtectedArea(longLine, [squareAround(49)], 's')
+    expect(result.status).toBe('ok')
+    expect(result.score).toBe(100)
+  })
+
+  it('avertit (sans alerte) quand le tracé traverse une zone protégée', () => {
+    const result = scoreProtectedArea(longLine, [squareAround(48.1)], 's')
+    expect(result.status).toBe('warning')
+    expect(result.score).toBe(60)
+    expect(result.facets?.[0].detail).toContain('Réserve test')
+  })
+})
 
 describe('scoreSignalisations', () => {
+  const weatherOk = scoreWeather(1, '88', 's')
+
   const sig = (type: Signalisation['type'], lat: number, lng = 7): Signalisation => ({
     id: `${type}${lat}`,
     type,
@@ -184,10 +242,6 @@ describe('scoreSignalisations', () => {
     expect(scoreSignalisations(longLine, [sig('chasse', 48.1, 7.2)], 's', modes).redFlag).toBeUndefined()
   })
 
-  it('n’intègre pas les feux de forêt au score', () => {
-    expect(scoreSignalisations(longLine, [sig('incendie', 48.1)], 's').status).toBe('ok')
-  })
-
   it('alerte à partir de trois signalements', () => {
     const many = [sig('arbre', 48.05), sig('boue', 48.1), sig('neige', 48.15)]
     expect(scoreSignalisations(longLine, many, 's').status).toBe('alert')
@@ -202,6 +256,37 @@ describe('computeScore', () => {
     const result = computeScore([ok, weatherOk], randonneur)
     expect(result.total).toBe(100)
     expect(result.verdict).toBe('serene')
+  })
+
+  it('force le score à 0 quand le critère incendie est en alerte, même si tout le reste est parfait', () => {
+    const fireAlert = scoreFire(
+      longLine,
+      [{ position: { lat: 48.1, lng: 7 }, acquiredAt: new Date(), confidence: 'high', frp: 20, satellite: 'N' }],
+      's',
+    )
+    const result = computeScore([ok, weatherOk, fireAlert], randonneur)
+    expect(result.total).toBe(0)
+    expect(result.verdict).toBe('alert')
+  })
+
+  it('ignore la préférence utilisateur pour l’incendie : toujours en red flag', () => {
+    const fireAlert = scoreFire(
+      longLine,
+      [{ position: { lat: 48.1, lng: 7 }, acquiredAt: new Date(), confidence: 'high', frp: 20, satellite: 'N' }],
+      's',
+    )
+    // Même en tentant de le régler sur « impact » ou « ignorer », le feu actif reste éliminatoire.
+    const result = computeScore([ok, weatherOk, fireAlert], randonneur, { ...DEFAULT_PREFERENCES, fire: 'impact' })
+    expect(result.total).toBe(0)
+    expect(result.vetoedBy).toBe('fire')
+  })
+
+  it('pondère la zone protégée comme un critère normal, sans forcer le score (contrairement à l’incendie)', () => {
+    const protectedArea = scoreProtectedArea(longLine, [squareAround(48.1)], 's')
+    const result = computeScore([ok, weatherOk, protectedArea], randonneur)
+    // poids randonneur : daylight 3, weather 3, protectedArea 2 -> (100*3 + 100*3 + 60*2) / 8 = 90
+    expect(result.total).toBe(90)
+    expect(result.verdict).not.toBe('alert')
   })
 
   it('ignore les critères indisponibles sans les compter comme bons', () => {
@@ -266,7 +351,16 @@ describe('computeScore', () => {
     })
 
     it('renvoie null quand tous les critères sont ignorés', () => {
-      const all = { daylight: 'ignore', weather: 'ignore', forecast: 'ignore', water: 'ignore', shelter: 'ignore', signalisations: 'ignore' } as const
+      const all = {
+        daylight: 'ignore',
+        weather: 'ignore',
+        forecast: 'ignore',
+        water: 'ignore',
+        shelter: 'ignore',
+        fire: 'ignore',
+        protectedArea: 'ignore',
+        signalisations: 'ignore',
+      } as const
       const result = computeScore([ok, weatherOk], randonneur, all)
       expect(result.total).toBeNull()
       expect(result.totalCriteria).toBe(0)

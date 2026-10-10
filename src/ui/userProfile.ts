@@ -141,8 +141,9 @@ export function createUserProfile(initial: User, onChange: (changes: UserChanges
 
   // Tableaux à trois colonnes (un mode par colonne) : on glisse un élément d'une colonne à l'autre.
   const criteriaBoard = createBoard(
-    // Les signalements se règlent type par type dans le second tableau
-    (Object.keys(CRITERION_LABEL) as CriterionId[]).filter((id) => id !== 'signalisations'),
+    // Les signalements se règlent type par type dans le second tableau ; l'incendie reste toujours
+    // en red flag (non négociable, cf domain/serenity.ts::computeScore) donc il n'est pas réglable ici.
+    (Object.keys(CRITERION_LABEL) as CriterionId[]).filter((id) => id !== 'signalisations' && id !== 'fire'),
     (id) => CRITERION_LABEL[id],
     (id) => user.preferences[id],
     (id, mode) => apply({ preferences: { ...user.preferences, [id]: mode } }, () => undefined),
