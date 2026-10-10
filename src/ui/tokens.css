@@ -1,0 +1,83 @@
+/*
+ * Design system « WazeOutdoor » (chart fourni par l'équipe).
+ * Marque et nom provisoires : seules les variables --od-brand* bougeront
+ * quand le nom du produit sera choisi, le reste ne bouge pas.
+ * Règle unique du chart : aucune valeur en dur dans les composants od-*,
+ * seulement ces variables.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap');
+
+:root {
+  /* Palette */
+  --od-focus: #0b5fd1;
+
+  --od-surface: #f5f2ea;
+  --od-surface-raised: #ffffff;
+  --od-surface-sunken: #ece7db;
+
+  --od-ink: #1b2420;
+  --od-ink-muted: #4e5751;
+  --od-ink-inverse: #ffffff;
+
+  --od-line: #cfc6b5;
+  --od-line-strong: #7a7466;
+
+  /* Marque provisoire (bleu lac) : pour l'action principale uniquement */
+  --od-brand: #1e4a5f;
+  --od-brand-pressed: #163848;
+
+  /* Ocre des courbes de niveau : point pointé et sélection, jamais de texte blanc dessus */
+  --od-accent: #c8742b;
+  --od-accent-soft: #f3e1cc;
+
+  --od-status-ok: #17734f;
+  --od-status-ok-soft: #ddf0e6;
+  --od-status-warn: #8f5300;
+  --od-status-warn-soft: #fbe9c8;
+  --od-status-closed: #b42318;
+  --od-status-closed-soft: #fbe1de;
+  --od-status-unknown: #5b6470;
+  --od-status-unknown-soft: #e6e8eb;
+
+  --od-map-water: #9cc7de;
+  --od-map-contour: #c9a57e;
+  --od-map-trail: #1b2420;
+
+  /* Typographie */
+  --od-font-title: 'Barlow Semi Condensed', system-ui, sans-serif;
+  --od-font-text: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --od-display: 700 32px/1.15 var(--od-font-title);
+  --od-title-1: 700 24px/1.2 var(--od-font-title);
+  --od-title-2: 600 20px/1.25 var(--od-font-title);
+  --od-body-lg: 400 18px/1.4 var(--od-font-text);
+  --od-body: 400 16px/1.4 var(--od-font-text);
+  --od-label: 700 16px/1.3 var(--od-font-text);
+  --od-caption: 400 14px/1.3 var(--od-font-text);
+
+  /* Espacements (grille de 4px) */
+  --od-space-1: 4px;
+  --od-space-2: 8px;
+  --od-space-3: 12px;
+  --od-space-4: 16px;
+  --od-space-6: 24px;
+  --od-space-8: 32px;
+  --od-space-12: 48px;
+
+  /* Formes */
+  --od-radius-sm: 6px;
+  --od-radius-md: 12px;
+  --od-radius-lg: 20px;
+  --od-radius-pill: 999px;
+
+  /* Ombres (deux seulement) */
+  --od-shadow-sheet: 0 -4px 16px rgb(27 36 32 / 0.18);
+  --od-shadow-control: 0 2px 10px rgb(27 36 32 / 0.16);
+
+  /* Tailles */
+  --od-size-touch: 48px;
+  --od-size-pin: 40px;
+  --od-size-icon: 24px;
+  --od-size-icon-sm: 20px;
+
+  --od-focus-ring: 0 0 0 2px var(--od-surface-raised), 0 0 0 5px var(--od-focus);
+}

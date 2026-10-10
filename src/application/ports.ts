@@ -58,6 +58,11 @@ export interface PlaceProvider {
   around(box: BoundingBox): Promise<Place[]>
 }
 
+export interface SignalisationStore {
+  save(signalisation: Signalisation): Promise<void>
+  list(): Promise<Signalisation[]>
+}
+
 export interface RouteSummary {
   id: string
   name: string
