@@ -2,13 +2,12 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Coordinates } from '../domain/coordinates'
 import { PLACE_CATEGORY_LABEL, type Place, type PlaceCategory } from '../domain/place'
+import type { ProtectedArea } from '../domain/protectedArea'
 import type { Route } from '../domain/route'
-import { isCritical, SIGNALISATION_TYPE_LABEL, type Signalisation, type SignalisationType } from '../domain/signalisation'
+import { SIGNALISATION_TYPE_LABEL, type Signalisation, type SignalisationType } from '../domain/signalisation'
 import { pictoIcon } from './pictos'
-import { CLOSED_STATUS_ICON_PATH, odIcon, WARNING_ICON_PATH } from './signalisationIcons'
-import logoUrl from './assets/logo.svg'
-import { SIGNALISATION_TYPE_LABEL, type Signalisation } from '../domain/signalisation'
 import { odIcon, WARNING_ICON_PATH } from './signalisationIcons'
+import logoUrl from './assets/logo.svg'
 
 // Centre des Vosges, cible de départ du projet
 const VOSGES: L.LatLngTuple = [48.0, 7.0]
@@ -55,32 +54,23 @@ export function badge(style: MarkerStyle): HTMLElement {
   return element
 }
 
-/** Pastille « danger signalé » : forme de statut (triangle), jamais la couleur seule. Chart WazeOutdoor. */
-function dangerPinBadge(legend = false): HTMLElement {
 /**
  * Pastille « danger signalé » : le picto dit quoi (planche des pictos d'imprévus), la gravité reste portée par une forme de statut
- * en coin, jamais par la couleur seule. Attention (triangle, orange) pour la plupart des signalements, bloquant (octogone barré,
- * rouge) pour les dangers graves (ex. feu de forêt). Chart WazeOutdoor.
+ * en coin (triangle « attention »), jamais par la couleur seule. Chart WazeOutdoor.
  */
 function dangerPinBadge(type: SignalisationType, legend = false, redFlag = false): HTMLElement {
-  const critical = isCritical(type)
   const element = document.createElement('span')
-  element.className = legend ? 'od-pin od-pin--legend' : 'od-pin'
-  element.append(odIcon(WARNING_ICON_PATH, legend ? 16 : 20))
-  const modifier = critical ? 'od-pin--critical' : ''
   const wave = redFlag ? 'od-pin--redflag' : ''
-  element.className = [legend ? 'od-pin od-pin--legend' : 'od-pin', modifier, wave].filter(Boolean).join(' ')
+  element.className = [legend ? 'od-pin od-pin--legend' : 'od-pin', wave].filter(Boolean).join(' ')
   const status = document.createElement('span')
   status.className = 'od-pin__status'
-  status.append(odIcon(critical ? CLOSED_STATUS_ICON_PATH : WARNING_ICON_PATH, legend ? 10 : 14))
+  status.append(odIcon(WARNING_ICON_PATH, legend ? 10 : 14))
   element.append(pictoIcon(type, legend ? 20 : 28), status)
   return element
 }
 
-function dangerPinIcon(): L.DivIcon {
 function dangerPinIcon(signalisation: Signalisation, redFlag: boolean): L.DivIcon {
   return L.divIcon({
-    html: dangerPinBadge(),
     html: dangerPinBadge(signalisation.type, false, redFlag),
     className: 'map-marker',
     iconSize: [40, 40],
@@ -125,6 +115,9 @@ function addLegend(map: L.Map): void {
     const dot = document.createElement('span')
     dot.className = 'map-legend__dot'
 
+    const zone = document.createElement('span')
+    zone.className = 'map-legend__zone'
+
     const list = document.createElement('ul')
     list.className = 'map-legend__list'
     list.append(
@@ -132,9 +125,8 @@ function addLegend(map: L.Map): void {
       legendRow(badge(START_STYLE), START_STYLE.label),
       ...LEGEND_CATEGORIES.map((category) => legendRow(badge(CATEGORY_STYLE[category]), CATEGORY_STYLE[category].label)),
       legendRow(dot, 'Votre position'),
+      legendRow(zone, 'Zone protégée'),
       legendRow(dangerPinBadge('arbre', true), 'Danger signalé (le picto dit lequel)'),
-      legendRow(dangerPinBadge('incendie', true), 'Danger grave (ex. feu de forêt)'),
-      legendRow(dangerPinBadge(true), 'Danger signalé'),
     )
 
     box.append(summary, list)
@@ -195,8 +187,19 @@ function placePopup(place: Place): HTMLElement {
   return box
 }
 
+function protectedAreaPopup(area: ProtectedArea): HTMLElement {
+  const box = document.createElement('div')
+  box.className = 'od-popup'
+  const title = document.createElement('strong')
+  title.textContent = area.name
+  box.append(title, document.createElement('br'), area.category)
+  if (area.manager) box.append(document.createElement('br'), `Gestionnaire : ${area.manager}`)
+  box.append(document.createElement('br'), 'Vérifiez la réglementation de la zone avant de partir (accès, chiens, bivouac, périodes de quiétude).')
+  return box
+}
+
 export interface RouteLayers {
-  show(route: Route, places: Place[]): void
+  show(route: Route, places: Place[], protectedAreas: ProtectedArea[]): void
   clear(): void
 }
 
@@ -205,8 +208,17 @@ export function createRouteLayers(map: L.Map): RouteLayers {
 
   return {
     clear: () => layer.clearLayers(),
-    show(route, places) {
+    show(route, places, protectedAreas) {
       layer.clearLayers()
+      // Zones protégées d'abord : elles restent sous le tracé et les marqueurs
+      for (const area of protectedAreas) {
+        L.polygon(
+          area.polygons.map((rings) => rings.map((ring) => ring.map((p): L.LatLngTuple => [p.lat, p.lng]))),
+          { className: 'protected-area' },
+        )
+          .bindPopup(protectedAreaPopup(area))
+          .addTo(layer)
+      }
       const line = L.polyline(
         route.points.map((p): L.LatLngTuple => [p.lat, p.lng]),
         { className: 'route-line', weight: 5, opacity: 0.9 },
@@ -307,8 +319,6 @@ export function createSignalisationLayer(map: L.Map): SignalisationLayer {
 
   const markerFor = (signalisation: Signalisation, position: L.LatLng) => {
     const label = SIGNALISATION_TYPE_LABEL[signalisation.type]
-    return L.marker([signalisation.position.lat, signalisation.position.lng], {
-      icon: dangerPinIcon(),
     return L.marker(position, {
       icon: dangerPinIcon(signalisation, redFlags.has(signalisation.type)),
       title: label,

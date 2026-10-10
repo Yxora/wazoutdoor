@@ -33,10 +33,22 @@ export const CRITERION_LABEL: Record<CriterionId, string> = {
 }
 
 /**
- * Par défaut, tous les critères pèsent normalement, sauf l'incendie qui démarre en red flag.
- * Le mode de l'incendie n'est de toute façon pas modifiable : `computeScore` l'ignore et le force
- * toujours à « veto », quelle que soit la valeur ici ou dans les préférences sauvegardées.
+ * Modes que l'utilisateur·rice peut choisir pour un critère. Non négociable : l'incendie est toujours en Red flag
+ * et une zone protégée ne peut pas être ignorée.
  */
+export function allowedModes(id: CriterionId): CriterionMode[] {
+  if (id === 'fire') return ['veto']
+  if (id === 'protectedArea') return ['impact', 'veto']
+  return ['ignore', 'impact', 'veto']
+}
+
+/** Mode réellement appliqué : un mode interdit (ancienne sauvegarde, appel direct) est ramené au plus proche autorisé */
+export function effectiveMode(id: CriterionId, mode: CriterionMode): CriterionMode {
+  const allowed = allowedModes(id)
+  return allowed.includes(mode) ? mode : allowed.includes('impact') ? 'impact' : allowed[0]
+}
+
+/** Par défaut, tous les critères pèsent normalement, sauf l'incendie qui est toujours en red flag. */
 export const DEFAULT_PREFERENCES: CriterionPreferences = {
   daylight: 'impact',
   weather: 'impact',

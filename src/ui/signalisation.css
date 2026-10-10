@@ -236,12 +236,7 @@
   height: 28px;
 }
 
-.od-pin--critical {
-  color: var(--od-status-closed);
-  border-color: var(--od-status-closed);
-}
-
-/* Forme de statut en coin : triangle (attention) ou octogone barré (bloquant) */
+/* Forme de statut en coin : triangle (attention) */
 .od-pin {
   position: relative;
 }

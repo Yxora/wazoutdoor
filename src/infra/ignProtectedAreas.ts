@@ -20,7 +20,7 @@ const LAYERS: { typeName: string; category: string }[] = [
 ]
 
 interface GeoJsonFeature {
-  properties: { nom_site?: string; url_fiche?: string; gest_site?: string }
+  properties: { nom_site?: string; gest_site?: string }
   geometry: { type: 'Polygon' | 'MultiPolygon'; coordinates: unknown }
 }
 
@@ -61,7 +61,6 @@ export class IgnProtectedAreas implements ProtectedAreaProvider {
     return body.features.map((feature): ProtectedArea => ({
       name: feature.properties.nom_site ?? layer.category,
       category: layer.category,
-      url: feature.properties.url_fiche ?? undefined,
       manager: feature.properties.gest_site ?? undefined,
       polygons: polygonsOf(feature.geometry),
     }))

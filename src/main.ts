@@ -135,7 +135,7 @@ async function main() {
         const route = parser.parse(gpxText)
         const profile = PROFILES[profileId]
         const evaluation = await evaluateRoute(deps, { route, profile, start, preferences: userStore.get().preferences, signalisationPreferences: userStore.get().signalisationPreferences })
-        layers.show(route, evaluation.places)
+        layers.show(route, evaluation.places, evaluation.protectedAreas)
         routeShown = true
         lastView = { routeName: route.name, profile, start, evaluation }
         scoreView.show(lastView)

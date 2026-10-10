@@ -147,7 +147,6 @@ function squareAround(centerLat: number): ProtectedArea {
   return {
     name: 'Réserve test',
     category: 'Réserve naturelle nationale',
-    url: 'https://inpn.mnhn.fr/test',
     polygons: [
       [
         [
@@ -275,10 +274,28 @@ describe('computeScore', () => {
       [{ position: { lat: 48.1, lng: 7 }, acquiredAt: new Date(), confidence: 'high', frp: 20, satellite: 'N' }],
       's',
     )
-    // Même en tentant de le régler sur « impact » ou « ignorer », le feu actif reste éliminatoire.
     const result = computeScore([ok, weatherOk, fireAlert], randonneur, { ...DEFAULT_PREFERENCES, fire: 'impact' })
     expect(result.total).toBe(0)
     expect(result.vetoedBy).toBe('fire')
+  })
+
+  it('force l’incendie en red flag même si l’utilisateur le règle sur « ignorer »', () => {
+    const fireAlert = scoreFire(
+      longLine,
+      [{ position: { lat: 48.1, lng: 7 }, acquiredAt: new Date(), confidence: 'high', frp: 20, satellite: 'N' }],
+      's',
+    )
+    const result = computeScore([ok, weatherOk, fireAlert], randonneur, { ...DEFAULT_PREFERENCES, fire: 'ignore' })
+    expect(result.total).toBe(0)
+    expect(result.vetoedBy).toBe('fire')
+  })
+
+  it('ne laisse pas ignorer une zone protégée : elle pèse comme « prendre en compte »', () => {
+    const protectedArea = scoreProtectedArea(longLine, [squareAround(48.1)], 's')
+    const ignored = computeScore([ok, weatherOk, protectedArea], randonneur, { ...DEFAULT_PREFERENCES, protectedArea: 'ignore' })
+    const counted = computeScore([ok, weatherOk, protectedArea], randonneur, { ...DEFAULT_PREFERENCES, protectedArea: 'impact' })
+    expect(ignored.total).toBe(counted.total)
+    expect(ignored.criteria.find((c) => c.id === 'protectedArea')?.mode).toBe('impact')
   })
 
   it('pondère la zone protégée comme un critère normal, sans forcer le score (contrairement à l’incendie)', () => {

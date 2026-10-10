@@ -5,7 +5,6 @@ export interface ProtectedArea {
   name: string
   /** Catégorie de protection, par ex. « Réserve naturelle nationale » */
   category: string
-  url?: string
   manager?: string
   /** Un polygone par élément du tableau (gère les multi-polygones), chaque polygone étant [anneau extérieur, trous...] */
   polygons: Coordinates[][][]

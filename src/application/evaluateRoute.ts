@@ -1,6 +1,7 @@
 import { listActiveSignalisations } from './listSignalisations'
 import { scoreForecast } from '../domain/forecast'
 import type { Place } from '../domain/place'
+import type { ProtectedArea } from '../domain/protectedArea'
 import type { Signalisation, SignalisationPreferences } from '../domain/signalisation'
 import type { CriterionPreferences, Profile } from '../domain/profile'
 import { ascentMeters, boundingBox, routeLengthMeters, sampleRoute, type Route, type SampledPoint } from '../domain/route'
@@ -62,6 +63,8 @@ export interface Evaluation {
   summary: RouteSummary
   score: SerenityScore
   places: Place[]
+  /** Zones protégées proches du tracé, pour l'affichage sur la carte ; vide si la source est indisponible */
+  protectedAreas: ProtectedArea[]
   /** Signalements actifs reçus, gardés pour recalculer le critère sans rappeler la source ; null si indisponibles */
   signalisations: Signalisation[] | null
   routeSamples: SampledPoint[]
@@ -105,7 +108,7 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
   const durationMin = estimateDurationMinutes(lengthM, ascentM ?? 0, profile)
   const end = new Date(start.getTime() + durationMin * 60_000)
 
-  const [daylight, weather, forecast, places, fire, protectedArea, signalisationsFound] = await Promise.all([
+  const [daylight, weather, forecast, places, fire, protectedAreas, signalisationsFound] = await Promise.all([
     deps.daylight.sunset(origin, start).then(
       (sunset) => scoreDaylight(end, sunset, deps.daylight.source),
       (error): CriterionResult =>
@@ -129,9 +132,11 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
       (error): CriterionResult => unknownCriterion('fire', 'Risque d’incendie', reason(error), deps.fireRisk.source),
     ),
     deps.protectedAreas.around(boundingBox(route.points, PROTECTED_AREA_MARGIN_DEGREES)).then(
-      (areas) => scoreProtectedArea(samples, areas, deps.protectedAreas.source),
-      (error): CriterionResult =>
-        unknownCriterion('protectedArea', 'Zones protégées', reason(error), deps.protectedAreas.source),
+      (areas) => ({ areas, criterion: scoreProtectedArea(samples, areas, deps.protectedAreas.source) }),
+      (error) => ({
+        areas: [] as ProtectedArea[],
+        criterion: unknownCriterion('protectedArea', 'Zones protégées', reason(error), deps.protectedAreas.source),
+      }),
     ),
     listActiveSignalisations(deps.signalisations).then(
       (found) => ({ found, error: null as string | null }),
@@ -154,8 +159,9 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
 
   return {
     summary: { distanceKm: lengthM / 1000, ascentM, durationMin, end },
-    score: computeScore([daylight, weather, forecast, water, shelter, fire, protectedArea, signalisations], profile, preferences),
+    score: computeScore([daylight, weather, forecast, water, shelter, fire, protectedAreas.criterion, signalisations], profile, preferences),
     places: places.found,
+    protectedAreas: protectedAreas.areas,
     signalisations: signalisationsFound.found,
     routeSamples: samples,
   }

@@ -220,7 +220,6 @@ describe('IgnProtectedAreas', () => {
         {
           properties: {
             nom_site: 'Massif Du Ventron',
-            url_fiche: 'https://inpn.mnhn.fr/espace/protege/FR3600095',
             gest_site: 'PNR Ballons des Vosges',
           },
           geometry: {
@@ -243,7 +242,6 @@ describe('IgnProtectedAreas', () => {
     expect(areas[0]).toMatchObject({
       name: 'Massif Du Ventron',
       category: 'Réserve naturelle nationale',
-      url: 'https://inpn.mnhn.fr/espace/protege/FR3600095',
       manager: 'PNR Ballons des Vosges',
     })
     expect(areas[0].polygons[0][0][0]).toEqual({ lat: 48.0, lng: 7.0 })

@@ -208,7 +208,6 @@ describe('evaluateRoute', () => {
         ],
       },
     })
-    // Même en réglant l'incendie sur « impact » dans les préférences, il reste éliminatoire.
     const preferences = { ...DEFAULT_PREFERENCES, fire: 'impact' as const }
     const result = await evaluateRoute(onFire, { route, profile: PROFILES.randonneur, start, preferences })
     expect(result.score.total).toBe(0)

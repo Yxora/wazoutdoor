@@ -25,10 +25,6 @@ const CRUE =
   `<path d="M33 6v22M33 11h5M33 17h5M33 23h5"/>` +
   `<path d="M5 27c4-4 8 4 12 0s8 4 12 0 8 4 14 0v14H5z" ${fill('water')}/><path d="M5 34c4-3 8 3 12 0s8 3 12 0 8 3 14 0"/>`
 
-const INCENDIE =
-  `<path d="M24 5c1 9 12 12 12 24a12 12 0 0 1-24 0c0-6 3-9 6-13 0 3 1 5 3 5-1-6-1-11 3-16z" ${fill('blaze')}/>` +
-  `<path d="M24 42a6 6 0 0 1-6-6c0-4 3-6 6-10 3 4 6 6 6 10a6 6 0 0 1-6 6z" ${fill('sun')}/>`
-
 const EBOULIS =
   `<path d="M5 41L21 13l16 28z" ${fill('rock')}/><path d="M17 41l4-9 4 9" fill="none"/>` +
   `<path d="M31 9l6-3 5 5-2 6-7-1z" ${fill('earth')}/>`
@@ -62,7 +58,6 @@ export const PICTO: Record<SignalisationType, string> = {
   neige: TERRAIN,
   troupeau: TROUPEAU,
   eau: CRUE,
-  incendie: INCENDIE,
   eboulis: EBOULIS,
   balisage: BALISAGE,
   dechets: DECHETS,

@@ -1,6 +1,6 @@
 import type { FireDetection } from './fire'
 import type { Place } from './place'
-import { DEFAULT_PREFERENCES, type CriterionId, type CriterionMode, type CriterionPreferences, type Profile } from './profile'
+import { DEFAULT_PREFERENCES, effectiveMode, type CriterionId, type CriterionMode, type CriterionPreferences, type Profile } from './profile'
 import { isPointInProtectedArea, type ProtectedArea } from './protectedArea'
 import { distanceMeters, type SampledPoint } from './route'
 import {
@@ -213,7 +213,7 @@ export function scoreProtectedArea(samples: SampledPoint[], areas: ProtectedArea
   const facets: Facet[] = entered.map((area) => ({
     label: area.category,
     status: 'warning',
-    detail: area.url ? `${area.name} — ${area.url}` : area.name,
+    detail: area.name,
   }))
 
   return {
@@ -290,9 +290,8 @@ export function computeScore(
 ): SerenityScore {
   const criteria = results.map((c) => ({
     ...c,
-    // Le risque d'incendie reste éliminatoire quelles que soient les préférences : non négociable,
-    // l'utilisateur ne peut pas le désactiver ni l'affaiblir (voir domain/profile.ts, DEFAULT_PREFERENCES).
-    mode: c.id === 'fire' ? ('veto' as const) : preferences[c.id],
+    // L'incendie reste éliminatoire et la zone protégée ne peut pas être ignorée, quelles que soient les préférences
+    mode: effectiveMode(c.id, preferences[c.id]),
   }))
   const counted = criteria.filter((c) => c.mode !== 'ignore')
   const available = counted.filter((c): c is typeof c & { score: number } => c.score !== null)

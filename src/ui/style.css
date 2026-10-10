@@ -378,6 +378,25 @@ path.route-line {
   stroke-dasharray: 10 8;
 }
 
+/* Zones protégées : orange transparent, le contour reste visible sans masquer la carte */
+path.protected-area {
+  fill: var(--od-status-warn);
+  fill-opacity: 0.25;
+  stroke: var(--od-status-warn);
+  stroke-width: 2;
+  stroke-opacity: 0.8;
+}
+
+.map-legend__zone {
+  display: inline-block;
+  width: 18px;
+  height: 12px;
+  border: 2px solid var(--od-status-warn);
+  background: color-mix(in srgb, var(--od-status-warn) 25%, transparent);
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
 path.user-dot {
   stroke: var(--od-focus);
   fill: var(--od-focus);
@@ -613,6 +632,12 @@ path.user-dot {
 .mode-card:focus-visible {
   outline: none;
   box-shadow: var(--od-focus-ring);
+}
+
+.mode-card__note {
+  display: block;
+  font: var(--od-caption);
+  color: var(--od-ink-muted);
 }
 
 .mode-card--dragging {
