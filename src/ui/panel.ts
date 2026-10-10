@@ -1,7 +1,7 @@
 import type { Evaluation } from '../application/evaluateRoute'
 import { listLibraryRoutes } from '../application/listLibraryRoutes'
 import type { RouteLibrary } from '../application/ports'
-import { PROFILES, type Profile, type ProfileId } from '../domain/profile'
+import { MODE_LABEL, PROFILES, type Profile, type ProfileId } from '../domain/profile'
 import { formatDuration, type CriterionResult, type CriterionStatus, type Facet, type Verdict } from '../domain/serenity'
 import { CLOSED_STATUS_ICON_PATH, odIcon, OK_STATUS_ICON_PATH, UNKNOWN_STATUS_ICON_PATH, WARNING_ICON_PATH } from './signalisationIcons'
 
@@ -24,6 +24,8 @@ export interface GpxExample {
 }
 
 export interface Panel {
+  /** Limite les profils proposés aux activités de l'utilisateur */
+  setActivities(activities: ProfileId[]): void
   showLoading(): void
   showResult(view: ResultView): void
   showError(message: string): void
@@ -76,6 +78,13 @@ const timeFormat = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '
 const dateTimeFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
 function criterionCard(criterion: CriterionResult): HTMLElement {
+  if (criterion.mode === 'ignore') {
+    return el(
+      'li',
+      { className: 'criterion criterion--ignored' },
+      el('div', { className: 'criterion__head' }, el('strong', {}, criterion.label), el('span', { className: 'criterion__status' }, 'Ignoré selon vos préférences')),
+    )
+  }
   const meta = [criterion.source]
   if (criterion.updatedAt) meta.push(`mis à jour le ${dateTimeFormat.format(criterion.updatedAt)}`)
 
@@ -88,6 +97,7 @@ function criterionCard(criterion: CriterionResult): HTMLElement {
       el('span', { className: 'criterion__icon' }, odIcon(STATUS_ICON_PATH[criterion.status], 20)),
       el('strong', {}, criterion.label),
       el('span', { className: 'criterion__status' }, STATUS_TEXT[criterion.status]),
+      criterion.mode === 'veto' ? el('span', { className: 'criterion__mode' }, MODE_LABEL.veto) : '',
       criterion.score === null ? '' : el('span', { className: 'criterion__score' }, `${criterion.score}/100`),
     ),
     el('p', { className: 'criterion__detail' }, criterion.detail),
@@ -179,6 +189,9 @@ export function createPanel(
   example: GpxExample,
   onEvaluate: (request: EvaluationRequest) => void,
   library?: RouteLibrary,
+  /** Vue « Personnaliser » (profil de l'utilisateur) */
+  userControl?: HTMLElement,
+  activities: ProfileId[] = Object.keys(PROFILES) as ProfileId[],
 ): Panel {
   let gpxText: string | null = null
 
@@ -189,15 +202,18 @@ export function createPanel(
   const result = el('section', { className: 'result' })
   result.setAttribute('aria-live', 'polite')
 
-  const profileInputs = (Object.keys(PROFILES) as ProfileId[]).map((id, index) =>
-    el('input', { type: 'radio', name: 'profile', value: id, checked: index === 0 }),
-  )
-  const profileField = el(
-    'fieldset',
-    { className: 'profiles' },
-    el('legend', {}, 'Votre profil'),
-    ...profileInputs.map((input) => el('label', {}, input, PROFILES[input.value as ProfileId].label)),
-  )
+  let profileInputs: HTMLInputElement[] = []
+  const profileField = el('fieldset', { className: 'profiles' })
+
+  function renderProfiles(ids: ProfileId[], selected?: ProfileId) {
+    const checked = selected && ids.includes(selected) ? selected : ids[0]
+    profileInputs = ids.map((id) => el('input', { type: 'radio', name: 'profile', value: id, checked: id === checked }))
+    profileField.replaceChildren(
+      el('legend', {}, 'Votre activité'),
+      ...profileInputs.map((input) => el('label', {}, input, PROFILES[input.value as ProfileId].label)),
+    )
+  }
+  renderProfiles(activities)
 
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0]
@@ -247,11 +263,17 @@ export function createPanel(
   root.append(
     el('h1', {}, 'Wazoutdoor'),
     el('p', { className: 'tagline' }, 'Score de sérénité d’un itinéraire, massif des Vosges. Prototype.'),
-    form,
-    result,
+    el('div', { className: 'view' }, form, result),
+    userControl ? el('div', { className: 'view' }, userControl) : '',
   )
+  const [planView, customView] = Array.from(root.querySelectorAll('.view'))
+  planView.setAttribute('data-view', 'plan')
+  customView?.setAttribute('data-view', 'custom')
 
   const panel: Panel = {
+    setActivities(ids) {
+      renderProfiles(ids, profileInputs.find((i) => i.checked)?.value as ProfileId | undefined)
+    },
     showLoading() {
       submit.disabled = true
       result.replaceChildren(el('p', { className: 'hint' }, 'Calcul en cours : altitude, coucher du soleil, météo, eau et abris…'))
@@ -267,13 +289,30 @@ export function createPanel(
       const ascent = summary.ascentM === null ? 'dénivelé inconnu' : `+${Math.round(summary.ascentM)} m`
       const headline =
         score.total === null || score.verdict === null
-          ? el('p', { className: 'error' }, 'Aucun critère n’a pu être calculé.')
+          ? el(
+              'p',
+              { className: 'error' },
+              score.totalCriteria === 0
+                ? 'Tous les critères sont ignorés : aucun score à calculer. Modifiez vos préférences.'
+                : 'Aucun critère n’a pu être calculé.',
+            )
           : el(
               'div',
               { className: `score score--${score.verdict}` },
               el('span', { className: 'score__value' }, String(score.total), el('small', {}, '/100')),
               el('span', { className: 'score__verdict' }, VERDICT_LABEL[score.verdict]),
             )
+
+      const vetoed = score.criteria.find((c) => c.id === score.vetoedBy)
+      const veto = vetoed
+        ? el(
+            'p',
+            { className: 'warning' },
+            vetoed.redFlag
+              ? `Score mis à 0 : « ${vetoed.redFlag} » est signalé sur votre parcours et vous l’avez réglé sur « ${MODE_LABEL.veto} ».`
+              : `Score mis à 0 : « ${vetoed.label} » est en alerte et vous l’avez réglé sur « ${MODE_LABEL.veto} ».`,
+          )
+        : ''
 
       const coverage =
         score.availableCriteria < score.totalCriteria
@@ -292,13 +331,14 @@ export function createPanel(
           `${summary.distanceKm.toFixed(1)} km · ${ascent} · ${formatDuration(summary.durationMin)} estimées (profil ${profile.label.toLowerCase()}) · départ ${timeFormat.format(start)}, arrivée vers ${timeFormat.format(summary.end)}`,
         ),
         headline,
-        coverage,
-        el('ul', { className: 'criteria' }, ...score.criteria.map(criterionCard)),
         el(
           'p',
           { className: 'disclaimer' },
-          'Ce score aide à préparer une sortie, il ne garantit pas la sécurité. Les durées et seuils par profil sont des hypothèses. Vérifiez la météo et les consignes locales avant de partir.',
+          'À prendre avec du recul : ce score aide à préparer une sortie, il ne garantit pas la sécurité. Les durées et seuils par profil sont des hypothèses. Vérifiez la météo et les consignes locales avant de partir.',
         ),
+        veto,
+        coverage,
+        el('ul', { className: 'criteria' }, ...score.criteria.map(criterionCard)),
       )
     },
   }

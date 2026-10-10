@@ -1,15 +1,18 @@
 import { checkDatabase } from './application/checkDatabase'
-import { evaluateRoute, type EvaluationDeps } from './application/evaluateRoute'
+import { applyPreferences, evaluateRoute, type EvaluationDeps } from './application/evaluateRoute'
 import { listActiveSignalisations } from './application/listSignalisations'
 import { locateUser } from './application/locateUser'
 import type { SignalisationStore } from './application/ports'
 import { reportSignalisation } from './application/reportSignalisation'
+import { updateUser } from './application/updateUser'
 import { PROFILES } from './domain/profile'
 import { BrowserGeolocator } from './infra/browserGeolocator'
+import { FixedGeolocator, positionFromSearch } from './infra/fixedGeolocator'
 import { GpxRouteParser } from './infra/gpxRouteParser'
 import { IgnElevation } from './infra/ignElevation'
 import { IgnProtectedAreas } from './infra/ignProtectedAreas'
 import { LocalSignalisationStore } from './infra/localSignalisationStore'
+import { LocalUserStore } from './infra/localUserStore'
 import { MeteoFranceVigilance } from './infra/meteoFranceVigilance'
 import { NasaFirmsFireRisk } from './infra/nasaFirmsFireRisk'
 import { OpenMeteoDaylight } from './infra/openMeteoDaylight'
@@ -19,22 +22,14 @@ import { StravaRoutes } from './infra/stravaRoutes'
 import { SupabaseHealth } from './infra/supabaseHealth'
 import { SupabaseSignalisationStore } from './infra/supabaseSignalisationStore'
 import { createMap, createRouteLayers, createSignalisationLayer, showUserPosition } from './ui/map'
-import { createPanel } from './ui/panel'
+import { createBottomNav } from './ui/bottomNav'
+import { createPanel, type ResultView } from './ui/panel'
 import { createSignalisationControl } from './ui/signalisationControl'
+import { createUserProfile } from './ui/userProfile'
 import exampleGpx from './ui/samples/hohneck-exemple.gpx?raw'
 import './ui/tokens.css'
 import './ui/style.css'
 import './ui/signalisation.css'
-
-const deps: EvaluationDeps = {
-  elevation: new IgnElevation(),
-  daylight: new OpenMeteoDaylight(),
-  weather: new MeteoFranceVigilance(import.meta.env.VITE_METEOFRANCE_API_KEY),
-  forecast: new OpenMeteoForecast(),
-  places: new RefugesInfoPlaces(),
-  fireRisk: new NasaFirmsFireRisk(import.meta.env.VITE_FIRMS_API_KEY),
-  protectedAreas: new IgnProtectedAreas(),
-}
 
 const parser = new GpxRouteParser()
 
@@ -44,6 +39,17 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 // Signalements partagés entre tout le monde si Supabase est configuré, sinon stockage local au navigateur.
 const signalisationStore: SignalisationStore =
   supabaseUrl && supabaseAnonKey ? new SupabaseSignalisationStore(supabaseUrl, supabaseAnonKey) : new LocalSignalisationStore()
+
+const deps: EvaluationDeps = {
+  elevation: new IgnElevation(),
+  daylight: new OpenMeteoDaylight(),
+  weather: new MeteoFranceVigilance(import.meta.env.VITE_METEOFRANCE_API_KEY),
+  forecast: new OpenMeteoForecast(),
+  places: new RefugesInfoPlaces(),
+  fireRisk: new NasaFirmsFireRisk(import.meta.env.VITE_FIRMS_API_KEY),
+  protectedAreas: new IgnProtectedAreas(),
+  signalisations: signalisationStore,
+}
 
 async function checkSupabase() {
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -97,7 +103,22 @@ async function main() {
   const map = createMap(document.getElementById('map')!)
   const layers = createRouteLayers(map)
   let routeShown = false
-  const geolocator = new BrowserGeolocator()
+  // Démo : ?pos=48.0,7.1 remplace la position du navigateur
+  const demoPosition = positionFromSearch(window.location.search)
+  const geolocator = demoPosition ? new FixedGeolocator(demoPosition) : new BrowserGeolocator()
+
+  const userStore = new LocalUserStore()
+  let lastView: ResultView | null = null
+
+  const userProfile = createUserProfile(userStore.get(), (changes) => {
+    const user = updateUser(userStore, changes)
+    panel.setActivities(user.activities)
+    // Le score se recalcule sur les données déjà reçues, sans rappeler les sources
+    if (lastView) {
+      lastView = { ...lastView, evaluation: applyPreferences(lastView.evaluation, lastView.profile, user.preferences, user.signalisationPreferences) }
+      panel.showResult(lastView)
+    }
+  })
 
   const panel = createPanel(
     document.getElementById('panel')!,
@@ -107,15 +128,18 @@ async function main() {
       try {
         const route = parser.parse(gpxText)
         const profile = PROFILES[profileId]
-        const evaluation = await evaluateRoute(deps, { route, profile, start })
+        const evaluation = await evaluateRoute(deps, { route, profile, start, preferences: userStore.get().preferences, signalisationPreferences: userStore.get().signalisationPreferences })
         layers.show(route, evaluation.places)
         routeShown = true
-        panel.showResult({ routeName: route.name, profile, start, evaluation })
+        lastView = { routeName: route.name, profile, start, evaluation }
+        panel.showResult(lastView)
       } catch (error) {
         panel.showError(error instanceof Error ? error.message : 'Une erreur inattendue est survenue.')
       }
     },
     strava,
+    userProfile,
+    userStore.get().activities,
   )
   if (stravaError) panel.showError(stravaError)
 
@@ -130,13 +154,15 @@ async function main() {
     .then((signalisations) => signalisationLayer.show(signalisations))
     .catch((error) => console.error(`Signalements indisponibles : ${error instanceof Error ? error.message : error}`))
 
-  createSignalisationControl({
+  const signalisationControl = createSignalisationControl({
     getCurrentPosition: () => locateUser(geolocator),
     onSubmit: async ({ position, type, description }) => {
       const signalisation = await reportSignalisation(signalisationStore, { position, type, description })
       signalisationLayer.add(signalisation)
     },
   })
+
+  createBottomNav(document.getElementById('panel')!, { onReport: () => signalisationControl.start() })
 
   checkSupabase()
 }

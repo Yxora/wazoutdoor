@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Place } from '../domain/place'
-import { PROFILES } from '../domain/profile'
+import { DEFAULT_PREFERENCES, PROFILES } from '../domain/profile'
 import type { Route } from '../domain/route'
-import { evaluateRoute, type EvaluationDeps } from './evaluateRoute'
+import { DEFAULT_SIGNALISATION_PREFERENCES } from '../domain/signalisation'
+import { applyPreferences, evaluateRoute, type EvaluationDeps } from './evaluateRoute'
 
 const route: Route = {
   name: 'Test',
@@ -55,12 +56,13 @@ function deps(overrides: Partial<EvaluationDeps> = {}): EvaluationDeps {
     places: { source: 'refuges', around: async () => [water, shelter] },
     fireRisk: { source: 'firms', around: async () => [] },
     protectedAreas: { source: 'ign', around: async () => [] },
+    signalisations: { save: async () => {}, list: async () => [] },
     ...overrides,
   }
 }
 
 describe('evaluateRoute', () => {
-  it('évalue les sept critères et résume le parcours', async () => {
+  it('évalue les huit critères et résume le parcours', async () => {
     const result = await evaluateRoute(deps(), { route, profile: PROFILES.randonneur, start })
     expect(result.score.criteria.map((c) => c.id)).toEqual([
       'daylight',
@@ -70,8 +72,9 @@ describe('evaluateRoute', () => {
       'shelter',
       'fire',
       'protectedArea',
+      'signalisations',
     ])
-    expect(result.score.availableCriteria).toBe(7)
+    expect(result.score.availableCriteria).toBe(8)
     expect(result.summary.distanceKm).toBeCloseTo(5.6, 1)
     expect(result.summary.ascentM).toBeGreaterThan(0)
     expect(result.places).toHaveLength(2)
@@ -108,7 +111,7 @@ describe('evaluateRoute', () => {
     })
     const result = await evaluateRoute(broken, { route, profile: PROFILES.randonneur, start })
     expect(result.summary.ascentM).toBeNull()
-    expect(result.score.availableCriteria).toBe(7)
+    expect(result.score.availableCriteria).toBe(8)
   })
 
   it('marque un critère indisponible quand sa source échoue, sans bloquer les autres', async () => {
@@ -124,7 +127,7 @@ describe('evaluateRoute', () => {
     const weather = result.score.criteria.find((c) => c.id === 'weather')
     expect(weather?.status).toBe('unknown')
     expect(weather?.detail).toContain('clé refusée')
-    expect(result.score.availableCriteria).toBe(6)
+    expect(result.score.availableCriteria).toBe(7)
   })
 
   it('transmet à la météo la fenêtre de la sortie et l’altitude moyenne', async () => {
@@ -196,6 +199,22 @@ describe('evaluateRoute', () => {
     expect(result.score.verdict).toBe('alert')
   })
 
+  it('ignore la préférence utilisateur pour l’incendie : le score reste à 0', async () => {
+    const onFire = deps({
+      fireRisk: {
+        source: 'firms',
+        around: async () => [
+          { position: { lat: 48.025, lng: 7 }, acquiredAt: new Date(), confidence: 'high', frp: 12, satellite: 'N' },
+        ],
+      },
+    })
+    // Même en réglant l'incendie sur « impact » dans les préférences, il reste éliminatoire.
+    const preferences = { ...DEFAULT_PREFERENCES, fire: 'impact' as const }
+    const result = await evaluateRoute(onFire, { route, profile: PROFILES.randonneur, start, preferences })
+    expect(result.score.total).toBe(0)
+    expect(result.score.vetoedBy).toBe('fire')
+  })
+
   it('marque le risque d’incendie indisponible quand FIRMS échoue, sans forcer le score à 0', async () => {
     const broken = deps({
       fireRisk: {
@@ -253,5 +272,62 @@ describe('evaluateRoute', () => {
     const result = await evaluateRoute(broken, { route, profile: PROFILES.randonneur, start })
     const protectedArea = result.score.criteria.find((c) => c.id === 'protectedArea')
     expect(protectedArea?.status).toBe('unknown')
+  })
+
+  it('applique les préférences de l’utilisateur au score', async () => {
+    const preferences = { ...DEFAULT_PREFERENCES, shelter: 'ignore' as const, water: 'ignore' as const }
+    const result = await evaluateRoute(deps(), { route, profile: PROFILES.randonneur, start, preferences })
+    expect(result.score.totalCriteria).toBe(6)
+    expect(result.score.criteria.find((c) => c.id === 'water')?.mode).toBe('ignore')
+  })
+
+  it('recalcule le score avec d’autres préférences sans rappeler les sources', async () => {
+    const first = await evaluateRoute(deps(), { route, profile: PROFILES.randonneur, start })
+    const again = applyPreferences(first, PROFILES.randonneur, { ...DEFAULT_PREFERENCES, daylight: 'ignore' })
+    expect(again.score.totalCriteria).toBe(7)
+    expect(again.summary).toBe(first.summary)
+  })
+
+  it('tient compte des signalements proches du tracé', async () => {
+    const withTree = deps({
+      signalisations: {
+        save: async () => {},
+        list: async () => [
+          { id: 'x', type: 'arbre', description: '', position: { lat: 48.025, lng: 7 }, createdAt: new Date() },
+        ],
+      },
+    })
+    const result = await evaluateRoute(withTree, { route, profile: PROFILES.randonneur, start })
+    expect(result.score.criteria.find((c) => c.id === 'signalisations')?.status).toBe('warning')
+  })
+
+  it('marque les signalements indisponibles quand le stockage échoue', async () => {
+    const broken = deps({
+      signalisations: {
+        save: async () => {},
+        list: async () => {
+          throw new Error('hors ligne')
+        },
+      },
+    })
+    const result = await evaluateRoute(broken, { route, profile: PROFILES.randonneur, start })
+    expect(result.score.criteria.find((c) => c.id === 'signalisations')?.status).toBe('unknown')
+  })
+
+  it('recalcule le critère des signalements avec d’autres préférences par type', async () => {
+    const withHunt = deps({
+      signalisations: {
+        save: async () => {},
+        list: async () => [
+          { id: 'c', type: 'chasse', description: '', position: { lat: 48.025, lng: 7 }, createdAt: new Date() },
+        ],
+      },
+    })
+    const first = await evaluateRoute(withHunt, { route, profile: PROFILES.randonneur, start })
+    expect(first.score.vetoedBy).toBeNull()
+    const strict = applyPreferences(first, PROFILES.randonneur, DEFAULT_PREFERENCES, { ...DEFAULT_SIGNALISATION_PREFERENCES, chasse: 'veto' })
+    expect(strict.score.total).toBe(0)
+    const lax = applyPreferences(first, PROFILES.randonneur, DEFAULT_PREFERENCES, { ...DEFAULT_SIGNALISATION_PREFERENCES, chasse: 'ignore' })
+    expect(lax.score.criteria.find((c) => c.id === 'signalisations')?.status).toBe('ok')
   })
 })

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Place } from './place'
-import { PROFILES } from './profile'
+import { DEFAULT_PREFERENCES, PROFILES } from './profile'
 import type { ProtectedArea } from './protectedArea'
 import { sampleRoute } from './route'
+import { DEFAULT_SIGNALISATION_PREFERENCES, type Signalisation } from './signalisation'
 import {
   computeScore,
   estimateDurationMinutes,
@@ -11,6 +12,7 @@ import {
   scoreFire,
   scoreProtectedArea,
   scoreShelter,
+  scoreSignalisations,
   scoreWater,
   scoreWeather,
   unknownCriterion,
@@ -175,6 +177,77 @@ describe('scoreProtectedArea', () => {
   })
 })
 
+describe('scoreSignalisations', () => {
+  const weatherOk = scoreWeather(1, '88', 's')
+
+  const sig = (type: Signalisation['type'], lat: number, lng = 7): Signalisation => ({
+    id: `${type}${lat}`,
+    type,
+    description: '',
+    position: { lat, lng },
+    createdAt: new Date(),
+  })
+
+  it('est ok sans signalement proche', () => {
+    expect(scoreSignalisations(longLine, [sig('arbre', 48.1, 7.1)], 's').status).toBe('ok')
+  })
+
+  it('prévient pour un ou deux signalements proches', () => {
+    const result = scoreSignalisations(longLine, [sig('arbre', 48.1)], 's')
+    expect(result.status).toBe('warning')
+    expect(result.facets?.[0].label).toBe('Arbre tombé')
+  })
+
+  it('détaille chaque signalement : type, description, distance et ancienneté', () => {
+    const now = new Date('2026-10-12T10:00:00Z')
+    const tree = { ...sig('arbre', 48.1), description: 'Sur le sentier, contournable par la gauche', createdAt: new Date('2026-10-10T10:00:00Z') }
+    const [facet] = scoreSignalisations(longLine, [tree], 's', undefined, now).facets ?? []
+    expect(facet.label).toBe('Arbre tombé')
+    expect(facet.detail).toContain('contournable par la gauche')
+    expect(facet.detail).toContain('signalé il y a 2 jours')
+    expect(facet.detail).toMatch(/à \d+ m du tracé \(zone d’effet : 150 m\)/)
+  })
+
+  it('classe les signalements du plus proche au plus loin', () => {
+    const facets = scoreSignalisations(longLine, [sig('arbre', 48.05, 7.001), sig('boue', 48.15)], 's').facets
+    expect(facets?.map((f) => f.label)).toEqual(['Boue, passage glissant', 'Arbre tombé'])
+  })
+
+  it('ignore les types de signalements que l’utilisateur a ignorés', () => {
+    const modes = { ...DEFAULT_SIGNALISATION_PREFERENCES, arbre: 'ignore' as const }
+    expect(scoreSignalisations(longLine, [sig('arbre', 48.1)], 's', modes).status).toBe('ok')
+  })
+
+  it('passe en alerte avec un type en red flag, et le signale pour mettre le score à 0', () => {
+    const modes = { ...DEFAULT_SIGNALISATION_PREFERENCES, chasse: 'veto' as const }
+    const result = scoreSignalisations(longLine, [sig('chasse', 48.1)], 's', modes)
+    expect(result.status).toBe('alert')
+    expect(result.redFlag).toBe('Chasse en cours')
+    expect(computeScore([result, weatherOk], randonneur).total).toBe(0)
+  })
+
+  it('compte la chasse dans un rayon de 3 km autour du tracé', () => {
+    const near = scoreSignalisations(longLine, [sig('chasse', 48.1, 7.03)], 's')
+    expect(near.status).toBe('warning')
+    expect(near.facets?.[0].detail).toContain('zone d’effet : 3,0 km')
+    expect(scoreSignalisations(longLine, [sig('chasse', 48.1, 7.06)], 's').status).toBe('ok')
+  })
+
+  it('garde 150 m pour les autres types', () => {
+    expect(scoreSignalisations(longLine, [sig('arbre', 48.1, 7.03)], 's').status).toBe('ok')
+  })
+
+  it('ne déclenche pas le red flag si ce type est loin du tracé', () => {
+    const modes = { ...DEFAULT_SIGNALISATION_PREFERENCES, chasse: 'veto' as const }
+    expect(scoreSignalisations(longLine, [sig('chasse', 48.1, 7.2)], 's', modes).redFlag).toBeUndefined()
+  })
+
+  it('alerte à partir de trois signalements', () => {
+    const many = [sig('arbre', 48.05), sig('boue', 48.1), sig('neige', 48.15)]
+    expect(scoreSignalisations(longLine, many, 's').status).toBe('alert')
+  })
+})
+
 describe('computeScore', () => {
   const ok = scoreDaylight(at('14:00'), at('17:00'), 's')
   const weatherOk = scoreWeather(1, '88', 's')
@@ -194,6 +267,18 @@ describe('computeScore', () => {
     const result = computeScore([ok, weatherOk, fireAlert], randonneur)
     expect(result.total).toBe(0)
     expect(result.verdict).toBe('alert')
+  })
+
+  it('ignore la préférence utilisateur pour l’incendie : toujours en red flag', () => {
+    const fireAlert = scoreFire(
+      longLine,
+      [{ position: { lat: 48.1, lng: 7 }, acquiredAt: new Date(), confidence: 'high', frp: 20, satellite: 'N' }],
+      's',
+    )
+    // Même en tentant de le régler sur « impact » ou « ignorer », le feu actif reste éliminatoire.
+    const result = computeScore([ok, weatherOk, fireAlert], randonneur, { ...DEFAULT_PREFERENCES, fire: 'impact' })
+    expect(result.total).toBe(0)
+    expect(result.vetoedBy).toBe('fire')
   })
 
   it('pondère la zone protégée comme un critère normal, sans forcer le score (contrairement à l’incendie)', () => {
@@ -221,6 +306,65 @@ describe('computeScore', () => {
     const alert = scoreDaylight(at('17:30'), at('17:00'), 's')
     const result = computeScore([alert, weatherOk, weatherOk, weatherOk], randonneur)
     expect(result.verdict).not.toBe('serene')
+  })
+
+  describe('préférences de l’utilisateur', () => {
+    const alertDaylight = scoreDaylight(at('17:30'), at('17:00'), 's')
+
+    it('donne le même résultat par défaut que sans préférences', () => {
+      expect(computeScore([ok, alertDaylight, weatherOk], randonneur, DEFAULT_PREFERENCES)).toEqual(
+        computeScore([ok, alertDaylight, weatherOk], randonneur),
+      )
+    })
+
+    it('exclut un critère ignoré du total et du décompte', () => {
+      const result = computeScore([alertDaylight, weatherOk], randonneur, { ...DEFAULT_PREFERENCES, daylight: 'ignore' })
+      expect(result.total).toBe(100)
+      expect(result.totalCriteria).toBe(1)
+      expect(result.criteria).toHaveLength(2)
+      expect(result.criteria[0].mode).toBe('ignore')
+    })
+
+    it('ne compte pas l’alerte d’un critère ignoré dans le verdict', () => {
+      const result = computeScore([alertDaylight, weatherOk], randonneur, { ...DEFAULT_PREFERENCES, daylight: 'ignore' })
+      expect(result.verdict).toBe('serene')
+    })
+
+    it('met le score à 0 quand un critère éliminatoire est en alerte', () => {
+      const result = computeScore([alertDaylight, weatherOk], randonneur, { ...DEFAULT_PREFERENCES, daylight: 'veto' })
+      expect(result.total).toBe(0)
+      expect(result.verdict).toBe('alert')
+      expect(result.vetoedBy).toBe('daylight')
+    })
+
+    it('n’a pas d’effet quand le critère éliminatoire n’est pas en alerte', () => {
+      const result = computeScore([ok, weatherOk], randonneur, { ...DEFAULT_PREFERENCES, daylight: 'veto' })
+      expect(result.total).toBe(100)
+      expect(result.vetoedBy).toBeNull()
+    })
+
+    it('ne met pas à 0 quand le critère éliminatoire est indisponible', () => {
+      const unknown = unknownCriterion('daylight', 'Retour avant la nuit', 'x', 's')
+      const result = computeScore([unknown, weatherOk], randonneur, { ...DEFAULT_PREFERENCES, daylight: 'veto' })
+      expect(result.total).toBe(100)
+      expect(result.vetoedBy).toBeNull()
+    })
+
+    it('renvoie null quand tous les critères sont ignorés', () => {
+      const all = {
+        daylight: 'ignore',
+        weather: 'ignore',
+        forecast: 'ignore',
+        water: 'ignore',
+        shelter: 'ignore',
+        fire: 'ignore',
+        protectedArea: 'ignore',
+        signalisations: 'ignore',
+      } as const
+      const result = computeScore([ok, weatherOk], randonneur, all)
+      expect(result.total).toBeNull()
+      expect(result.totalCriteria).toBe(0)
+    })
   })
 })
 

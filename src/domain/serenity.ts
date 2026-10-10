@@ -1,8 +1,16 @@
 import type { FireDetection } from './fire'
 import type { Place } from './place'
+import { DEFAULT_PREFERENCES, type CriterionId, type CriterionMode, type CriterionPreferences, type Profile } from './profile'
 import { isPointInProtectedArea, type ProtectedArea } from './protectedArea'
-import type { CriterionId, Profile } from './profile'
 import { distanceMeters, type SampledPoint } from './route'
+import {
+  DEFAULT_SIGNALISATION_PREFERENCES,
+  reachMeters,
+  SCORED_SIGNALISATION_TYPES,
+  SIGNALISATION_TYPE_LABEL,
+  type Signalisation,
+  type SignalisationPreferences,
+} from './signalisation'
 
 export type CriterionStatus = 'ok' | 'warning' | 'alert' | 'unknown'
 
@@ -24,6 +32,10 @@ export interface CriterionResult {
   /** Fraîcheur de la donnée, quand la source la fournit */
   updatedAt?: Date
   facets?: Facet[]
+  /** Renseigné par computeScore selon les préférences de l'utilisateur */
+  mode?: CriterionMode
+  /** Type de signalement réglé en « red flag » et présent sur le parcours : met le score à 0 */
+  redFlag?: string
 }
 
 export type Verdict = 'serene' | 'caution' | 'alert'
@@ -32,6 +44,9 @@ export interface SerenityScore {
   /** Moyenne pondérée des critères disponibles, null si aucun */
   total: number | null
   verdict: Verdict | null
+  /** Critère éliminatoire en alerte qui a mis le score à 0 */
+  vetoedBy: CriterionId | null
+  /** Critères disponibles parmi ceux qui comptent (les ignorés sont exclus) */
   availableCriteria: number
   totalCriteria: number
   criteria: CriterionResult[]
@@ -210,24 +225,88 @@ export function scoreProtectedArea(samples: SampledPoint[], areas: ProtectedArea
   }
 }
 
-export function computeScore(criteria: CriterionResult[], profile: Profile): SerenityScore {
-  const available = criteria.filter((c): c is CriterionResult & { score: number } => c.score !== null)
-  const availableCriteria = available.length
-  const totalCriteria = criteria.length
+function formatDistance(meters: number): string {
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1).replace('.', ',')} km` : `${Math.round(meters / 10) * 10} m`
+}
 
-  // Un risque d'incendie avéré rend le tracé dangereux quels que soient les autres critères : le score est forcé à 0.
-  const fireAlert = criteria.some((c) => c.id === 'fire' && c.status === 'alert')
-  if (fireAlert) {
-    return { total: 0, verdict: 'alert', availableCriteria, totalCriteria, criteria }
+function ageLabel(createdAt: Date, now: Date): string {
+  const days = Math.floor((now.getTime() - createdAt.getTime()) / 86_400_000)
+  if (days < 1) return 'signalé aujourd’hui'
+  return days === 1 ? 'signalé hier' : `signalé il y a ${days} jours`
+}
+
+export function scoreSignalisations(
+  samples: SampledPoint[],
+  signalisations: Signalisation[],
+  source: string,
+  typeModes: SignalisationPreferences = DEFAULT_SIGNALISATION_PREFERENCES,
+  now = new Date(),
+): CriterionResult {
+  const base = { id: 'signalisations' as const, label: 'Signalements sur le parcours', source }
+  const onRoute = signalisations
+    .filter((signalisation) => SCORED_SIGNALISATION_TYPES.includes(signalisation.type) && typeModes[signalisation.type] !== 'ignore')
+    .map((signalisation) => ({
+      signalisation,
+      distanceM: Math.min(...samples.map((sample) => distanceMeters(sample, signalisation.position))),
+    }))
+    .filter((hit) => hit.distanceM <= reachMeters(hit.signalisation.type))
+    .sort((a, b) => a.distanceM - b.distanceM)
+
+  if (onRoute.length === 0) {
+    return {
+      ...base,
+      status: 'ok',
+      score: 100,
+      detail: `Aucun signalement actif dans la zone d’effet du tracé. Cela ne garantit pas l’absence d’imprévu : peu de monde signale encore.`,
+    }
   }
 
+  const isRedFlag = (type: Signalisation['type']) => typeModes[type] === 'veto'
+  const facets: Facet[] = onRoute.map(({ signalisation, distanceM }) => {
+    const where = `à ${formatDistance(distanceM)} du tracé (zone d’effet : ${formatDistance(reachMeters(signalisation.type))}), ${ageLabel(signalisation.createdAt, now)}`
+    return {
+      label: SIGNALISATION_TYPE_LABEL[signalisation.type] + (isRedFlag(signalisation.type) ? ' (red flag)' : ''),
+      status: isRedFlag(signalisation.type) ? 'alert' : 'warning',
+      detail: signalisation.description ? `${signalisation.description} (${where})` : where,
+    }
+  })
+  const detail = `${onRoute.length} signalement(s) dans la zone d’effet du tracé. Détail ci-dessous.`
+  const redFlag = onRoute.find((hit) => isRedFlag(hit.signalisation.type))
+  const alert = redFlag !== undefined || onRoute.length >= 3
+  return {
+    ...base,
+    status: alert ? 'alert' : 'warning',
+    score: alert ? 20 : 60,
+    detail,
+    facets,
+    redFlag: redFlag && SIGNALISATION_TYPE_LABEL[redFlag.signalisation.type],
+  }
+}
+
+export function computeScore(
+  results: CriterionResult[],
+  profile: Profile,
+  preferences: CriterionPreferences = DEFAULT_PREFERENCES,
+): SerenityScore {
+  const criteria = results.map((c) => ({
+    ...c,
+    // Le risque d'incendie reste éliminatoire quelles que soient les préférences : non négociable,
+    // l'utilisateur ne peut pas le désactiver ni l'affaiblir (voir domain/profile.ts, DEFAULT_PREFERENCES).
+    mode: c.id === 'fire' ? ('veto' as const) : preferences[c.id],
+  }))
+  const counted = criteria.filter((c) => c.mode !== 'ignore')
+  const available = counted.filter((c): c is typeof c & { score: number } => c.score !== null)
   const weightSum = available.reduce((sum, c) => sum + profile.weights[c.id], 0)
-  const total =
+  const weighted =
     weightSum === 0
       ? null
       : Math.round(available.reduce((sum, c) => sum + c.score * profile.weights[c.id], 0) / weightSum)
 
-  const alerts = criteria.filter((c) => c.status === 'alert').length
+  // Un critère éliminatoire en alerte met le score à 0, même si les autres sont bons
+  const vetoedBy = counted.find((c) => (c.mode === 'veto' && c.status === 'alert') || c.redFlag)?.id ?? null
+  const total = weighted === null ? null : vetoedBy === null ? weighted : 0
+
+  const alerts = counted.filter((c) => c.status === 'alert').length
   let verdict: Verdict | null = null
   if (total !== null) {
     if (total < 50 || alerts >= 2) verdict = 'alert'
@@ -235,7 +314,7 @@ export function computeScore(criteria: CriterionResult[], profile: Profile): Ser
     else verdict = 'caution'
   }
 
-  return { total, verdict, availableCriteria, totalCriteria, criteria }
+  return { total, verdict, vetoedBy, availableCriteria: available.length, totalCriteria: counted.length, criteria }
 }
 
 export function formatDuration(minutes: number): string {

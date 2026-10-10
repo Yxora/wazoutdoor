@@ -52,3 +52,7 @@ export function odIcon(pathD: string, size = 24): SVGSVGElement {
   svg.innerHTML = pathD
   return svg
 }
+
+/** Icônes du menu du bas : tracé et réglages */
+export const ROUTE_ICON_PATH = '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/>'
+export const SLIDERS_ICON_PATH = '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'

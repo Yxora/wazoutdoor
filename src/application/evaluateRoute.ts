@@ -1,7 +1,9 @@
+import { listActiveSignalisations } from './listSignalisations'
 import { scoreForecast } from '../domain/forecast'
 import type { Place } from '../domain/place'
-import type { Profile } from '../domain/profile'
-import { ascentMeters, boundingBox, routeLengthMeters, sampleRoute, type Route } from '../domain/route'
+import type { Signalisation, SignalisationPreferences } from '../domain/signalisation'
+import type { CriterionPreferences, Profile } from '../domain/profile'
+import { ascentMeters, boundingBox, routeLengthMeters, sampleRoute, type Route, type SampledPoint } from '../domain/route'
 import {
   computeScore,
   estimateDurationMinutes,
@@ -9,6 +11,7 @@ import {
   scoreFire,
   scoreProtectedArea,
   scoreShelter,
+  scoreSignalisations,
   scoreWater,
   scoreWeather,
   unknownCriterion,
@@ -22,6 +25,7 @@ import type {
   ForecastProvider,
   PlaceProvider,
   ProtectedAreaProvider,
+  SignalisationStore,
   WeatherAlertProvider,
 } from './ports'
 
@@ -33,12 +37,17 @@ export interface EvaluationDeps {
   places: PlaceProvider
   fireRisk: FireRiskProvider
   protectedAreas: ProtectedAreaProvider
+  signalisations: SignalisationStore
 }
 
 export interface EvaluationInput {
   route: Route
   profile: Profile
   start: Date
+  /** Préférences de l'utilisateur sur les critères ; par défaut, tous ont un impact */
+  preferences?: CriterionPreferences
+  /** Traitement de chaque type de signalement ; par défaut, tous sont pris en compte */
+  signalisationPreferences?: SignalisationPreferences
 }
 
 export interface RouteSummary {
@@ -53,8 +62,12 @@ export interface Evaluation {
   summary: RouteSummary
   score: SerenityScore
   places: Place[]
+  /** Signalements actifs reçus, gardés pour recalculer le critère sans rappeler la source ; null si indisponibles */
+  signalisations: Signalisation[] | null
+  routeSamples: SampledPoint[]
 }
 
+const SIGNALISATIONS_SOURCE = 'Signalements Wazoutdoor'
 const SAMPLE_STEP_M = 250
 const MAX_ELEVATION_POINTS = 100
 const PLACES_MARGIN_DEGREES = 0.02
@@ -80,7 +93,7 @@ async function computeElevations(route: Route, deps: EvaluationDeps, lengthM: nu
 }
 
 export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput): Promise<Evaluation> {
-  const { route, profile, start } = input
+  const { route, profile, start, preferences, signalisationPreferences } = input
   const lengthM = routeLengthMeters(route.points)
   const samples = sampleRoute(route.points, SAMPLE_STEP_M)
   const origin = route.points[0]
@@ -92,7 +105,7 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
   const durationMin = estimateDurationMinutes(lengthM, ascentM ?? 0, profile)
   const end = new Date(start.getTime() + durationMin * 60_000)
 
-  const [daylight, weather, forecast, places, fire, protectedArea] = await Promise.all([
+  const [daylight, weather, forecast, places, fire, protectedArea, signalisationsFound] = await Promise.all([
     deps.daylight.sunset(origin, start).then(
       (sunset) => scoreDaylight(end, sunset, deps.daylight.source),
       (error): CriterionResult =>
@@ -120,7 +133,15 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
       (error): CriterionResult =>
         unknownCriterion('protectedArea', 'Zones protégées', reason(error), deps.protectedAreas.source),
     ),
+    listActiveSignalisations(deps.signalisations).then(
+      (found) => ({ found, error: null as string | null }),
+      (error) => ({ found: null, error: reason(error) }),
+    ),
   ])
+  const signalisations =
+    signalisationsFound.found === null
+      ? unknownCriterion('signalisations', 'Signalements sur le parcours', signalisationsFound.error ?? '', SIGNALISATIONS_SOURCE)
+      : scoreSignalisations(samples, signalisationsFound.found, SIGNALISATIONS_SOURCE, signalisationPreferences)
 
   const water: CriterionResult =
     places.error === null
@@ -133,7 +154,24 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
 
   return {
     summary: { distanceKm: lengthM / 1000, ascentM, durationMin, end },
-    score: computeScore([daylight, weather, forecast, water, shelter, fire, protectedArea], profile),
+    score: computeScore([daylight, weather, forecast, water, shelter, fire, protectedArea, signalisations], profile, preferences),
     places: places.found,
+    signalisations: signalisationsFound.found,
+    routeSamples: samples,
   }
+}
+
+/** Recalcule le score d'une évaluation déjà faite avec d'autres préférences, sans rappeler les sources */
+export function applyPreferences(
+  evaluation: Evaluation,
+  profile: Profile,
+  preferences: CriterionPreferences,
+  signalisationPreferences?: SignalisationPreferences,
+): Evaluation {
+  const criteria = evaluation.score.criteria.map((criterion) =>
+    criterion.id === 'signalisations' && evaluation.signalisations !== null
+      ? scoreSignalisations(evaluation.routeSamples, evaluation.signalisations, criterion.source, signalisationPreferences)
+      : criterion,
+  )
+  return { ...evaluation, score: computeScore(criteria, profile, preferences) }
 }

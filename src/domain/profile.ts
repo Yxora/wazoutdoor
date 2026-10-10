@@ -1,6 +1,52 @@
 export type ProfileId = 'randonneur' | 'traileur' | 'vttiste'
 
-export type CriterionId = 'daylight' | 'weather' | 'forecast' | 'water' | 'shelter' | 'fire' | 'protectedArea'
+export type CriterionId =
+  | 'daylight'
+  | 'weather'
+  | 'forecast'
+  | 'water'
+  | 'shelter'
+  | 'fire'
+  | 'protectedArea'
+  | 'signalisations'
+
+/** Comment un critère entre dans le score : absent, pondéré, ou éliminatoire (met le score à 0 s'il est en alerte) */
+export type CriterionMode = 'ignore' | 'impact' | 'veto'
+
+export type CriterionPreferences = Record<CriterionId, CriterionMode>
+
+export const MODE_LABEL: Record<CriterionMode, string> = {
+  ignore: 'Ignorer',
+  impact: 'Prendre en compte',
+  veto: 'Red flag',
+}
+
+export const CRITERION_LABEL: Record<CriterionId, string> = {
+  daylight: 'Retour avant la nuit',
+  weather: 'Vigilance météo',
+  forecast: 'Météo prévue pendant la sortie',
+  water: 'Points d’eau',
+  shelter: 'Abris et repli',
+  fire: 'Risque d’incendie',
+  protectedArea: 'Zones protégées',
+  signalisations: 'Signalements sur le parcours',
+}
+
+/**
+ * Par défaut, tous les critères pèsent normalement, sauf l'incendie qui démarre en red flag.
+ * Le mode de l'incendie n'est de toute façon pas modifiable : `computeScore` l'ignore et le force
+ * toujours à « veto », quelle que soit la valeur ici ou dans les préférences sauvegardées.
+ */
+export const DEFAULT_PREFERENCES: CriterionPreferences = {
+  daylight: 'impact',
+  weather: 'impact',
+  forecast: 'impact',
+  water: 'impact',
+  shelter: 'impact',
+  fire: 'veto',
+  protectedArea: 'impact',
+  signalisations: 'impact',
+}
 
 /**
  * Hypothèses de travail, pas des valeurs validées : à confronter aux interviews.
@@ -26,7 +72,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     climbMetersPerHour: 600,
     waterGapMaxKm: 10,
     shelterMaxKm: 3,
-    weights: { daylight: 3, weather: 3, forecast: 3, water: 2, shelter: 2, fire: 3, protectedArea: 2 },
+    weights: { daylight: 3, weather: 3, forecast: 3, water: 2, shelter: 2, fire: 3, protectedArea: 2, signalisations: 2 },
   },
   traileur: {
     id: 'traileur',
@@ -35,7 +81,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     climbMetersPerHour: 900,
     waterGapMaxKm: 12,
     shelterMaxKm: 5,
-    weights: { daylight: 3, weather: 3, forecast: 3, water: 3, shelter: 1, fire: 3, protectedArea: 2 },
+    weights: { daylight: 3, weather: 3, forecast: 3, water: 3, shelter: 1, fire: 3, protectedArea: 2, signalisations: 2 },
   },
   vttiste: {
     id: 'vttiste',
@@ -44,6 +90,6 @@ export const PROFILES: Record<ProfileId, Profile> = {
     climbMetersPerHour: 500,
     waterGapMaxKm: 15,
     shelterMaxKm: 5,
-    weights: { daylight: 3, weather: 3, forecast: 3, water: 2, shelter: 2, fire: 3, protectedArea: 2 },
+    weights: { daylight: 3, weather: 3, forecast: 3, water: 2, shelter: 2, fire: 3, protectedArea: 2, signalisations: 2 },
   },
 }
