@@ -66,7 +66,9 @@ Sur la carte, chaque catégorie de lieu a une couleur **et** un glyphe différen
 
 **Import Strava** : l'utilisateur·rice connecte son compte Strava (OAuth2, scopes `read,read_all`) et choisit l'un de ses itinéraires, dont le GPX alimente le flux existant. Port `RouteLibrary`, adaptateur `infra/stravaRoutes.ts`, cas d'usage `application/listLibraryRoutes.ts`. L'échange du code et le refresh du token passent par la Edge Function Supabase `supabase/functions/strava-token` (le secret client y reste ; l'API v3 elle-même autorise le CORS). Le jeton est gardé dans `sessionStorage`. Configuration : `VITE_STRAVA_CLIENT_ID`, secrets Supabase `STRAVA_CLIENT_ID` et `STRAVA_CLIENT_SECRET`, domaine de callback de l'app Strava. À vérifier : les conditions d'usage de l'API Strava et les quotas d'une app non validée.
 
-Pas encore fait : chemins de repli par tronçon, fréquentation (aucune source ouverte), zones protégées, signalements communautaires (Supabase n'est plus utilisé que pour un test de connexion dans la console), déploiement GitLab/GitHub Pages. Overpass (OSM) a été testé mais reste instable : il n'est pas branché.
+**Signalisation** : l'utilisateur·rice signale un danger ou un imprévu sur la carte (arbre tombé, chemin fermé...). Domaine `domain/signalisation.ts` (types, criticité, expiration), cas d'usage `reportSignalisation` et `listSignalisations`, port `SignalisationStore`, adaptateurs `infra/supabaseSignalisationStore.ts` (table `signalisations`, migration dans `supabase/migrations/`) et `infra/localSignalisationStore.ts` (repli sans Supabase), vue `ui/signalisationControl.ts` et couche carte dans `ui/map.ts`.
+
+Pas encore fait : chemins de repli par tronçon, fréquentation (aucune source ouverte), zones protégées, déploiement GitLab/GitHub Pages. Overpass (OSM) a été testé mais reste instable : il n'est pas branché.
 
 ### Stack
 

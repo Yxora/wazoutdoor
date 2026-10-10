@@ -4,6 +4,7 @@ import { MeteoFranceVigilance } from './meteoFranceVigilance'
 import { OpenMeteoDaylight } from './openMeteoDaylight'
 import { OpenMeteoForecast } from './openMeteoForecast'
 import { RefugesInfoPlaces } from './refugesInfoPlaces'
+import { SupabaseSignalisationStore } from './supabaseSignalisationStore'
 
 function stubFetch(routes: Record<string, unknown>, status = 200) {
   const calls: { url: string; headers?: HeadersInit }[] = []
