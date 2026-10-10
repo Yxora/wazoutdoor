@@ -150,6 +150,7 @@ async function main() {
         importModal.setBusy(false)
         importModal.allowClose()
         importModal.close()
+        nav.markMap()
       } catch (error) {
         importModal.showError(error instanceof Error ? error.message : 'Une erreur inattendue est survenue.')
       }
@@ -158,8 +159,6 @@ async function main() {
     userStore.get().activities,
   )
   if (stravaError) importModal.showError(stravaError)
-  // Au retour de Strava, on reprend sur Vérifier pour choisir un itinéraire
-  if (returnedFromStrava) importModal.open()
 
   // La localisation ne doit pas écraser le cadrage d'un tracé déjà affiché
   locateUser(geolocator).then((location) => {
@@ -194,7 +193,14 @@ async function main() {
     }, onPlan: () => {
       scoreView.closeDetail()
       importModal.toggle()
+      return importModal.isOpen()
     } })
+  importModal.onClose(() => nav.planClosed())
+  // Au retour de Strava, on reprend sur Vérifier pour choisir un itinéraire
+  if (returnedFromStrava) {
+    importModal.open()
+    nav.planOpened()
+  }
 
   // Signaler est l'onglet par défaut : son écran s'ouvre dès l'arrivée (sauf au retour de Strava)
   if (!returnedFromStrava) signalisationControl.start()

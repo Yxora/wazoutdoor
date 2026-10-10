@@ -16,6 +16,9 @@ export interface ImportModal {
   setActivities(activities: ProfileId[]): void
   open(): void
   close(): void
+  isOpen(): boolean
+  /** Appelé à chaque fermeture (croix, Échap, programmatique) */
+  onClose(listener: () => void): void
   /** Calcul en cours : le formulaire reste affiché, le bouton est bloqué */
   setBusy(busy: boolean): void
   /** Affiche l'erreur et rouvre la modale si besoin */
@@ -345,6 +348,10 @@ export function createImportModal(
     },
     close() {
       dialog.close()
+    },
+    isOpen: () => dialog.open,
+    onClose(listener) {
+      dialog.addEventListener('close', listener)
     },
     setBusy(busy) {
       submit.disabled = busy

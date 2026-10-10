@@ -6,7 +6,8 @@ export interface BottomNavActions {
   onLeaveReport(): void
   /** Mode consultation : ne laisse que la carte (ferme les modales et le panneau) */
   onConsult(): void
-  onPlan(): void
+  /** Ouvre ou ferme la modale d'import ; renvoie vrai si elle est ouverte ensuite */
+  onPlan(): boolean
 }
 
 function tab(label: string, iconPath: string): HTMLButtonElement {
@@ -26,6 +27,12 @@ function tab(label: string, iconPath: string): HTMLButtonElement {
 export interface BottomNav {
   /** Bascule sur la carte seule (après un signalement) */
   showMap(): void
+  /** Met Consulter en avant sans rien fermer (après le calcul d'un score, la carte est visible) */
+  markMap(): void
+  /** La modale d'import vient de s'ouvrir sans passer par l'onglet (retour de Strava) */
+  planOpened(): void
+  /** La modale d'import vient de se fermer : la carte seule reste affichée : Consulter devient actif */
+  planClosed(): void
 }
 
 export function createBottomNav(panel: HTMLElement, actions: BottomNavActions): BottomNav {
@@ -38,7 +45,7 @@ export function createBottomNav(panel: HTMLElement, actions: BottomNavActions): 
   let base = report
 
   function select(current: HTMLButtonElement) {
-    for (const button of [report, consult, custom]) {
+    for (const button of [report, consult, plan, custom]) {
       if (button === current) button.setAttribute('aria-current', 'page')
       else button.removeAttribute('aria-current')
     }
@@ -62,10 +69,11 @@ export function createBottomNav(panel: HTMLElement, actions: BottomNavActions): 
   }
   consult.addEventListener('click', showMap)
   plan.addEventListener('click', () => {
-    base = report
     showCustom(false)
     actions.onLeaveReport()
-    actions.onPlan()
+    // Refermée, la modale laisse la carte seule : Consulter
+    base = actions.onPlan() ? plan : consult
+    select(base)
   })
   custom.addEventListener('click', () => {
     actions.onLeaveReport()
@@ -78,5 +86,20 @@ export function createBottomNav(panel: HTMLElement, actions: BottomNavActions): 
   nav.append(report, consult, plan, custom)
   document.body.append(nav)
   showCustom(false)
-  return { showMap }
+  return {
+    showMap,
+    markMap() {
+      base = consult
+      if (panel.dataset.view !== 'custom') select(base)
+    },
+    planOpened() {
+      base = plan
+      if (panel.dataset.view !== 'custom') select(base)
+    },
+    planClosed() {
+      if (base !== plan) return
+      base = consult
+      if (panel.dataset.view !== 'custom') select(base)
+    },
+  }
 }

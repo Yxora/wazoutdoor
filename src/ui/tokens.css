@@ -85,6 +85,8 @@
   /* Tailles */
   --od-size-touch: 48px;
   --od-nav-height: 64px;
+  /* Marge sous le menu du bas : la zone de sécurité du téléphone (barre d'accueil), plafonnée pour ne pas laisser un grand vide */
+  --od-nav-inset: min(env(safe-area-inset-bottom, 0px), 8px);
   --od-size-pin: 40px;
   --od-size-icon: 24px;
   --od-size-icon-sm: 20px;

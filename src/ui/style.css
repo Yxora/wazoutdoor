@@ -426,8 +426,8 @@ path.user-dot {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   box-sizing: border-box;
-  height: calc(var(--od-nav-height) + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom);
+  height: calc(var(--od-nav-height) + var(--od-nav-inset));
+  padding-bottom: var(--od-nav-inset);
   background: var(--od-surface-raised);
   border-top: 1px solid var(--od-line);
   box-shadow: var(--od-shadow-sheet);
@@ -475,12 +475,12 @@ path.user-dot {
 @media (max-width: 600px) {
   /* Attributions et échelle de la carte au-dessus du menu */
   .leaflet-bottom {
-    bottom: calc(var(--od-nav-height) + env(safe-area-inset-bottom));
+    bottom: calc(var(--od-nav-height) + var(--od-nav-inset));
   }
 
   #panel {
     top: auto;
-    bottom: calc(var(--od-nav-height) + env(safe-area-inset-bottom));
+    bottom: calc(var(--od-nav-height) + var(--od-nav-inset));
     left: 0;
     width: 100%;
     max-height: calc(60dvh - var(--od-nav-height));
@@ -660,7 +660,7 @@ path.user-dot {
 /* Vue Personnaliser : plein écran, la carte n'est plus affichée */
 #panel[data-view='custom'] {
   z-index: 1060;
-  inset: 0 0 calc(var(--od-nav-height) + env(safe-area-inset-bottom)) 0;
+  inset: 0 0 calc(var(--od-nav-height) + var(--od-nav-inset)) 0;
   width: auto;
   max-height: none;
   border: none;
@@ -693,7 +693,7 @@ path.user-dot {
 .modal {
   position: fixed;
   z-index: 1050;
-  inset: 0 0 calc(var(--od-nav-height) + env(safe-area-inset-bottom)) 0;
+  inset: 0 0 calc(var(--od-nav-height) + var(--od-nav-inset)) 0;
   box-sizing: border-box;
   width: auto;
   max-width: none;
@@ -802,7 +802,7 @@ path.user-dot {
   z-index: 1050;
   left: var(--od-space-3);
   right: var(--od-space-3);
-  bottom: calc(var(--od-nav-height) + env(safe-area-inset-bottom) + var(--od-space-3));
+  bottom: calc(var(--od-nav-height) + var(--od-nav-inset) + var(--od-space-3));
   display: flex;
   align-items: center;
   gap: var(--od-space-3);
