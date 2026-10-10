@@ -63,8 +63,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 
 function defaultStart(): Date {
   const start = new Date()
-  start.setHours(9, 0, 0, 0)
-  if (start.getTime() < Date.now()) start.setDate(start.getDate() + 1)
+  start.setSeconds(0, 0)
   return start
 }
 
