@@ -124,7 +124,7 @@ body {
   margin: 0;
 }
 
-button {
+#panel button {
   font: var(--od-label);
   min-height: var(--od-size-touch);
   padding: 0 var(--od-space-6);
@@ -135,26 +135,26 @@ button {
   cursor: pointer;
 }
 
-button.primary {
+#panel button.primary {
   background: var(--od-brand);
   border-color: var(--od-brand);
   color: var(--od-ink-inverse);
 }
 
-button.primary:active {
+#panel button.primary:active {
   background: var(--od-brand-pressed);
 }
 
-button:disabled {
+#panel button:disabled {
   background: var(--od-surface-sunken);
   border-color: transparent;
   color: var(--od-ink-muted);
   cursor: progress;
 }
 
-button:focus-visible,
-input:focus-visible,
-select:focus-visible {
+#panel button:focus-visible,
+#panel input:focus-visible,
+#panel select:focus-visible {
   outline: none;
   box-shadow: var(--od-focus-ring);
 }
@@ -397,4 +397,22 @@ path.user-dot {
 
 .library select {
   width: 100%;
+}
+
+/* Zoom : contrôle flottant à droite, 48px, ombre de contrôle (chart TopoMap) */
+.leaflet-bar {
+  border: none;
+  border-radius: var(--od-radius-pill);
+  box-shadow: var(--od-shadow-control);
+  overflow: hidden;
+}
+
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  width: var(--od-size-touch);
+  height: var(--od-size-touch);
+  line-height: var(--od-size-touch);
+  background-color: var(--od-surface-raised);
+  color: var(--od-ink);
+  font-size: 24px;
 }

@@ -129,7 +129,9 @@ function addLegend(map: L.Map): void {
 }
 
 export function createMap(container: HTMLElement): L.Map {
-  const map = L.map(container).setView(VOSGES, ZOOM_INITIAL)
+  // Zoom à droite : le panneau recouvre le coin haut gauche, où Leaflet le place par défaut
+  const map = L.map(container, { zoomControl: false }).setView(VOSGES, ZOOM_INITIAL)
+  L.control.zoom({ position: 'topright', zoomInTitle: 'Zoomer', zoomOutTitle: 'Dézoomer' }).addTo(map)
 
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
