@@ -9,7 +9,7 @@ function library(overrides: Partial<RouteLibrary> = {}): RouteLibrary {
     beginConnection: () => {},
     finishConnection: async () => {},
     disconnect: () => {},
-    list: async () => [{ id: '1', name: 'Hohneck', distanceKm: 12.3, ascentM: 640 }],
+    list: async () => [{ id: '1', name: 'Hohneck', distanceKm: 12.3, ascentM: 640, activity: 'trail' as const, outline: [] }],
     gpx: async () => '<gpx/>',
     ...overrides,
   }
@@ -18,7 +18,7 @@ function library(overrides: Partial<RouteLibrary> = {}): RouteLibrary {
 describe('listLibraryRoutes', () => {
   it('renvoie les itinéraires quand le compte est connecté', async () => {
     const result = await listLibraryRoutes(library())
-    expect(result).toEqual({ ok: true, routes: [{ id: '1', name: 'Hohneck', distanceKm: 12.3, ascentM: 640 }] })
+    expect(result).toEqual({ ok: true, routes: [{ id: '1', name: 'Hohneck', distanceKm: 12.3, ascentM: 640, activity: 'trail' as const, outline: [] }] })
   })
 
   it('ne contacte pas le service quand le compte n’est pas connecté', async () => {

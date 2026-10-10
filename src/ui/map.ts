@@ -5,6 +5,7 @@ import { PLACE_CATEGORY_LABEL, type Place, type PlaceCategory } from '../domain/
 import type { Route } from '../domain/route'
 import { isCritical, SIGNALISATION_TYPE_LABEL, type Signalisation } from '../domain/signalisation'
 import { CLOSED_STATUS_ICON_PATH, odIcon, WARNING_ICON_PATH } from './signalisationIcons'
+import logoUrl from './assets/logo.svg'
 
 // Centre des Vosges, cible de départ du projet
 const VOSGES: L.LatLngTuple = [48.0, 7.0]
@@ -92,7 +93,7 @@ function legendRow(symbol: HTMLElement, label: string): HTMLElement {
 }
 
 function addLegend(map: L.Map): void {
-  const legend = new L.Control({ position: 'topright' })
+  const legend = new L.Control({ position: 'topleft' })
 
   legend.onAdd = () => {
     const box = L.DomUtil.create('details', 'map-legend') as HTMLDetailsElement
@@ -128,9 +129,21 @@ function addLegend(map: L.Map): void {
   legend.addTo(map)
 }
 
+function addLogo(map: L.Map): void {
+  const logo = new L.Control({ position: 'topright' })
+  logo.onAdd = () => {
+    const img = L.DomUtil.create('img', 'map-logo') as HTMLImageElement
+    img.src = logoUrl
+    img.alt = 'Wazoutdoor'
+    return img
+  }
+  logo.addTo(map)
+}
+
 export function createMap(container: HTMLElement): L.Map {
-  // Zoom à droite : le panneau recouvre le coin haut gauche, où Leaflet le place par défaut
+  // Logo puis zoom à droite : le panneau recouvre le coin haut gauche (sur grand écran), où Leaflet place le zoom par défaut
   const map = L.map(container, { zoomControl: false }).setView(VOSGES, ZOOM_INITIAL)
+  addLogo(map)
   L.control.zoom({ position: 'topright', zoomInTitle: 'Zoomer', zoomOutTitle: 'Dézoomer' }).addTo(map)
 
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {

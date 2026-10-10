@@ -21,10 +21,10 @@ import { SupabaseHealth } from './infra/supabaseHealth'
 import { SupabaseSignalisationStore } from './infra/supabaseSignalisationStore'
 import { createMap, createRouteLayers, createSignalisationLayer, showUserPosition } from './ui/map'
 import { createBottomNav } from './ui/bottomNav'
-import { createPanel, type ResultView } from './ui/panel'
+import { createImportModal } from './ui/importModal'
+import { createScoreView, type ResultView } from './ui/scoreView'
 import { createSignalisationControl } from './ui/signalisationControl'
 import { createUserProfile } from './ui/userProfile'
-import exampleGpx from './ui/samples/hohneck-exemple.gpx?raw'
 import './ui/tokens.css'
 import './ui/style.css'
 import './ui/signalisation.css'
@@ -108,19 +108,18 @@ async function main() {
 
   const userProfile = createUserProfile(userStore.get(), (changes) => {
     const user = updateUser(userStore, changes)
-    panel.setActivities(user.activities)
+    importModal.setActivities(user.activities)
     // Le score se recalcule sur les données déjà reçues, sans rappeler les sources
     if (lastView) {
       lastView = { ...lastView, evaluation: applyPreferences(lastView.evaluation, lastView.profile, user.preferences, user.signalisationPreferences) }
-      panel.showResult(lastView)
+      scoreView.show(lastView)
     }
   })
+  document.getElementById('panel')!.append(userProfile)
 
-  const panel = createPanel(
-    document.getElementById('panel')!,
-    { label: 'exemple Schlucht, Hohneck (aller-retour)', gpx: exampleGpx },
+  const scoreView = createScoreView()
+  const importModal = createImportModal(
     async ({ profileId, start, gpxText }) => {
-      panel.showLoading()
       try {
         const route = parser.parse(gpxText)
         const profile = PROFILES[profileId]
@@ -128,16 +127,18 @@ async function main() {
         layers.show(route, evaluation.places)
         routeShown = true
         lastView = { routeName: route.name, profile, start, evaluation }
-        panel.showResult(lastView)
+        scoreView.show(lastView)
+        importModal.setBusy(false)
+        importModal.allowClose()
+        importModal.close()
       } catch (error) {
-        panel.showError(error instanceof Error ? error.message : 'Une erreur inattendue est survenue.')
+        importModal.showError(error instanceof Error ? error.message : 'Une erreur inattendue est survenue.')
       }
     },
     strava,
-    userProfile,
     userStore.get().activities,
   )
-  if (stravaError) panel.showError(stravaError)
+  if (stravaError) importModal.showError(stravaError)
 
   // La localisation ne doit pas écraser le cadrage d'un tracé déjà affiché
   locateUser(geolocator).then((location) => {
@@ -158,7 +159,10 @@ async function main() {
     },
   })
 
-  createBottomNav(document.getElementById('panel')!, { onReport: () => signalisationControl.start() })
+  createBottomNav(document.getElementById('panel')!, { onReport: () => signalisationControl.start(), onPlan: () => {
+      scoreView.closeDetail()
+      importModal.toggle()
+    } })
 
   checkSupabase()
 }

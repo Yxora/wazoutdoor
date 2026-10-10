@@ -65,11 +65,17 @@ export interface SignalisationStore {
   list(): Promise<Signalisation[]>
 }
 
+/** Type d'activité de l'itinéraire, tel que la bibliothèque le déclare (pas une déduction) */
+export type RouteActivity = 'ride' | 'mtb' | 'run' | 'trail' | 'other'
+
 export interface RouteSummary {
   id: string
   name: string
   distanceKm: number
   ascentM: number | null
+  activity: RouteActivity
+  /** Tracé simplifié [lat, lng] pour la miniature ; vide si la bibliothèque n'en fournit pas */
+  outline: [number, number][]
 }
 
 /** Bibliothèque d'itinéraires d'un compte externe (Strava), accessible après connexion de l'utilisateur·rice */

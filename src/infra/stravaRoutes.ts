@@ -1,4 +1,5 @@
-import type { RouteLibrary, RouteSummary } from '../application/ports'
+import type { RouteActivity, RouteLibrary, RouteSummary } from '../application/ports'
+import { decodePolyline } from './polyline'
 
 const API = 'https://www.strava.com/api/v3'
 const AUTHORIZE = 'https://www.strava.com/oauth/authorize'
@@ -25,6 +26,17 @@ interface StravaRoute {
   name: string
   distance: number
   elevation_gain: number | null
+  /** 1 = vélo, 2 = course à pied */
+  type?: number
+  /** 1 = route, 2 = VTT, 3 = cyclo-cross, 4 = trail, 5 = mixte */
+  sub_type?: number
+  map?: { summary_polyline?: string | null }
+}
+
+function activityOf(route: StravaRoute): RouteActivity {
+  if (route.type === 1) return route.sub_type === 2 ? 'mtb' : 'ride'
+  if (route.type === 2) return route.sub_type === 4 ? 'trail' : 'run'
+  return 'other'
 }
 
 export interface StravaConfig {
@@ -85,6 +97,8 @@ export class StravaRoutes implements RouteLibrary {
       name: route.name,
       distanceKm: route.distance / 1000,
       ascentM: route.elevation_gain,
+      activity: activityOf(route),
+      outline: decodePolyline(route.map?.summary_polyline ?? ''),
     }))
   }
 

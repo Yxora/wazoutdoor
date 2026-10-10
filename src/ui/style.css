@@ -124,7 +124,8 @@ body {
   margin: 0;
 }
 
-#panel button {
+#panel button,
+.modal button {
   font: var(--od-label);
   min-height: var(--od-size-touch);
   padding: 0 var(--od-space-6);
@@ -135,17 +136,20 @@ body {
   cursor: pointer;
 }
 
-#panel button.primary {
+#panel button.primary,
+.modal button.primary {
   background: var(--od-brand);
   border-color: var(--od-brand);
   color: var(--od-ink-inverse);
 }
 
-#panel button.primary:active {
+#panel button.primary:active,
+.modal button.primary:active {
   background: var(--od-brand-pressed);
 }
 
-#panel button:disabled {
+#panel button:disabled,
+.modal button:disabled {
   background: var(--od-surface-sunken);
   border-color: transparent;
   color: var(--od-ink-muted);
@@ -154,7 +158,10 @@ body {
 
 #panel button:focus-visible,
 #panel input:focus-visible,
-#panel select:focus-visible {
+#panel select:focus-visible,
+.modal button:focus-visible,
+.modal input:focus-visible,
+.modal select:focus-visible {
   outline: none;
   box-shadow: var(--od-focus-ring);
 }
@@ -300,6 +307,14 @@ body {
   box-shadow: var(--od-shadow-control);
 }
 
+.map-logo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--od-radius-pill);
+  box-shadow: var(--od-shadow-control);
+}
+
 .map-legend {
   min-width: 170px;
   padding: var(--od-space-2) var(--od-space-3);
@@ -377,13 +392,8 @@ path.user-dot {
   color: var(--od-status-warn);
 }
 
-/* Vues du panneau, choisies par le menu du bas (ui/bottomNav.ts) */
+/* Le panneau ne sert plus qu'à la vue Personnaliser, ouverte par le menu du bas (ui/bottomNav.ts) */
 #panel[data-view=''] {
-  display: none;
-}
-
-#panel[data-view='plan'] [data-view='custom'],
-#panel[data-view='custom'] [data-view='plan'] {
   display: none;
 }
 
@@ -615,6 +625,7 @@ path.user-dot {
 
 /* Vue Personnaliser : plein écran, la carte n'est plus affichée */
 #panel[data-view='custom'] {
+  z-index: 1060;
   inset: 0 0 calc(var(--od-nav-height) + env(safe-area-inset-bottom)) 0;
   width: auto;
   max-height: none;
@@ -642,4 +653,297 @@ path.user-dot {
 .criterion__mode {
   font: var(--od-caption);
   color: var(--od-status-closed);
+}
+
+/* Modales plein écran : import du tracé et détail du score. <dialog> non modal, pour laisser le menu du bas visible et utilisable */
+.modal {
+  position: fixed;
+  z-index: 1050;
+  inset: 0 0 calc(var(--od-nav-height) + env(safe-area-inset-bottom)) 0;
+  box-sizing: border-box;
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: var(--od-surface);
+  color: var(--od-ink);
+  overflow-y: auto;
+}
+
+@media (min-width: 601px) {
+  .modal {
+    inset: 0 0 calc(var(--od-nav-height) + var(--od-space-6)) 0;
+  }
+}
+
+.modal__body {
+  box-sizing: border-box;
+  width: min(560px, 100%);
+  margin: 0 auto;
+  padding: var(--od-space-6) var(--od-space-4);
+}
+
+.modal h1 {
+  margin: 0 0 var(--od-space-4);
+  font: var(--od-title-1);
+}
+
+.modal__close {
+  display: block;
+  margin: 0 auto var(--od-space-6);
+}
+
+.import-modal fieldset {
+  margin: 0;
+}
+
+.source-switch {
+  display: flex;
+  gap: var(--od-space-2);
+  padding: 0;
+  border: none;
+}
+
+.source-switch legend {
+  padding: 0 0 var(--od-space-1);
+  font: var(--od-caption);
+  color: var(--od-ink-muted);
+}
+
+.source-switch__item {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  justify-items: stretch;
+  gap: var(--od-space-1);
+}
+
+.source-switch__account {
+  display: grid;
+  justify-items: center;
+}
+
+.source-switch label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--od-space-2);
+  min-height: var(--od-size-touch);
+  border: 1px solid var(--od-line-strong);
+  border-radius: var(--od-radius-md);
+  background: var(--od-surface-raised);
+  font: var(--od-label);
+  cursor: pointer;
+}
+
+.source-switch label:has(input:checked) {
+  border-color: var(--od-brand);
+  box-shadow: inset 0 0 0 2px var(--od-brand);
+}
+
+.source-switch label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.source-switch input {
+  position: absolute;
+  opacity: 0;
+}
+
+.source-switch label:has(input:focus-visible) {
+  box-shadow: var(--od-focus-ring);
+}
+
+.source-pane[hidden] {
+  display: none;
+}
+
+/* Score en bas de la carte, au-dessus du menu */
+.score-bar {
+  position: fixed;
+  z-index: 1050;
+  left: var(--od-space-3);
+  right: var(--od-space-3);
+  bottom: calc(var(--od-nav-height) + env(safe-area-inset-bottom) + var(--od-space-3));
+  display: flex;
+  align-items: center;
+  gap: var(--od-space-3);
+  box-sizing: border-box;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: var(--od-space-2) var(--od-space-4);
+  border: 2px solid var(--od-s);
+  border-radius: var(--od-radius-md);
+  background: var(--od-s-soft);
+  color: var(--od-s);
+  box-shadow: var(--od-shadow-control);
+  text-align: left;
+  cursor: pointer;
+}
+
+.score-bar[hidden] {
+  display: none;
+}
+
+.score-bar--serene {
+  --od-s: var(--od-status-ok);
+  --od-s-soft: var(--od-status-ok-soft);
+}
+
+.score-bar--caution {
+  --od-s: var(--od-status-warn);
+  --od-s-soft: var(--od-status-warn-soft);
+}
+
+.score-bar--alert {
+  --od-s: var(--od-status-closed);
+  --od-s-soft: var(--od-status-closed-soft);
+}
+
+.score-bar--unknown {
+  --od-s: var(--od-status-unknown);
+  --od-s-soft: var(--od-surface-raised);
+}
+
+.score-bar:focus-visible {
+  outline: none;
+  box-shadow: var(--od-focus-ring);
+}
+
+.score-bar__value {
+  font: var(--od-display);
+}
+
+.score-bar small {
+  font: var(--od-caption);
+}
+
+.score-bar__text {
+  display: grid;
+  min-width: 0;
+}
+
+.score-bar__text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 601px) {
+  .score-bar {
+    bottom: calc(var(--od-nav-height) + var(--od-space-6));
+  }
+}
+
+/* Action secondaire discrète (ex. Déconnecter Strava) */
+.modal button.button--small {
+  justify-self: start;
+  min-height: 0;
+  padding: var(--od-space-1) var(--od-space-2);
+  border-color: transparent;
+  background: none;
+  color: var(--od-ink-muted);
+  font: var(--od-caption);
+  text-decoration: underline;
+}
+
+/* Liste déroulante des itinéraires importés : miniature du tracé, nom, distance, activité */
+.route-dropdown {
+  position: relative;
+}
+
+.route-list {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: var(--od-space-1);
+  max-height: 40vh;
+  margin: var(--od-space-1) 0 0;
+  padding: var(--od-space-1);
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--od-line-strong);
+  border-radius: var(--od-radius-md);
+  background: var(--od-surface-raised);
+  box-shadow: var(--od-shadow-control);
+}
+
+.route-list[hidden] {
+  display: none;
+}
+
+.route-item {
+  display: flex;
+  align-items: center;
+  gap: var(--od-space-3);
+  padding: var(--od-space-2) var(--od-space-3);
+  border-radius: var(--od-radius-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.route-list .route-item:hover,
+.route-list .route-item:focus-visible {
+  outline: none;
+  background: var(--od-surface-sunken);
+}
+
+.modal button.route-dropdown__trigger {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.route-item__thumb {
+  flex: none;
+  box-sizing: border-box;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--od-radius-md);
+  background: var(--od-surface-sunken);
+  color: var(--od-brand);
+}
+
+.route-item__text {
+  display: grid;
+  min-width: 0;
+}
+
+.route-item__text small {
+  color: var(--od-ink-muted);
+  font: var(--od-caption);
+}
+
+.route-item__activity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--od-space-1);
+}
+
+/* Évite que le champ fichier ou le nom du tracé ne fasse déborder la modale sur petit écran */
+.form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.field {
+  min-width: 0;
+}
+
+.field input {
+  width: 100%;
+  min-width: 0;
+}
+
+.row .hint {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.import-modal .source-switch label {
+  min-width: 0;
 }

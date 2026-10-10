@@ -1,9 +1,8 @@
-import { odIcon, ROUTE_ICON_PATH, SLIDERS_ICON_PATH, WARNING_ICON_PATH } from './signalisationIcons'
-
-type View = 'plan' | 'custom'
+import { odIcon, SLIDERS_ICON_PATH, VERIFY_ICON_PATH, WARNING_ICON_PATH } from './signalisationIcons'
 
 export interface BottomNavActions {
   onReport(): void
+  onPlan(): void
 }
 
 function tab(label: string, iconPath: string): HTMLButtonElement {
@@ -17,32 +16,31 @@ function tab(label: string, iconPath: string): HTMLButtonElement {
 }
 
 /**
- * Menu du bas : Signaler (lance le signalement), Planifier et Personnaliser (affichent le panneau sur la vue choisie).
- * Toucher l'onglet actif ferme le panneau et laisse toute la place à la carte.
+ * Menu du bas : Signaler (lance le signalement), Vérifier (rouvre la modale d'import) et Personnaliser (affiche le panneau).
+ * Toucher l'onglet Personnaliser quand il est actif ferme le panneau et laisse toute la place à la carte.
  */
 export function createBottomNav(panel: HTMLElement, actions: BottomNavActions): void {
   const report = tab('Signaler', WARNING_ICON_PATH)
-  const plan = tab('Planifier', ROUTE_ICON_PATH)
+  const plan = tab('Vérifier', VERIFY_ICON_PATH)
   const custom = tab('Personnaliser', SLIDERS_ICON_PATH)
-  const views: [View, HTMLButtonElement][] = [['plan', plan], ['custom', custom]]
 
-  function show(view: View | '') {
-    panel.dataset.view = view
-    for (const [id, button] of views) {
-      if (id === view) button.setAttribute('aria-current', 'page')
-      else button.removeAttribute('aria-current')
-    }
+  function showCustom(visible: boolean) {
+    panel.dataset.view = visible ? 'custom' : ''
+    if (visible) custom.setAttribute('aria-current', 'page')
+    else custom.removeAttribute('aria-current')
   }
 
   report.addEventListener('click', actions.onReport)
-  for (const [id, button] of views) {
-    button.addEventListener('click', () => show(panel.dataset.view === id ? '' : id))
-  }
+  plan.addEventListener('click', () => {
+    showCustom(false)
+    actions.onPlan()
+  })
+  custom.addEventListener('click', () => showCustom(panel.dataset.view !== 'custom'))
 
   const nav = document.createElement('nav')
   nav.className = 'bottom-nav'
   nav.setAttribute('aria-label', 'Navigation principale')
   nav.append(report, plan, custom)
   document.body.append(nav)
-  show('plan')
+  showCustom(false)
 }
