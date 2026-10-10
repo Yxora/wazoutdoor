@@ -33,6 +33,8 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           VITE_STRAVA_CLIENT_ID: ${{ vars.VITE_STRAVA_CLIENT_ID }}
+          # Clé Météo-France : intégrée au JavaScript du site, donc visible. Acceptable pour un prototype (clé à courte durée de vie)
+          VITE_METEOFRANCE_API_KEY: ${{ secrets.VITE_METEOFRANCE_API_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
