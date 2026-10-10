@@ -1,0 +1,5 @@
+guidelines/
+.idea
+node_modules/
+dist/
+.env
