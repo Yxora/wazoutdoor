@@ -6,6 +6,7 @@ import type { SignalisationStore } from './application/ports'
 import { reportSignalisation } from './application/reportSignalisation'
 import { updateUser } from './application/updateUser'
 import { PROFILES } from './domain/profile'
+import { SIGNALISATION_TYPES, type SignalisationPreferences, type SignalisationType } from './domain/signalisation'
 import { BrowserGeolocator } from './infra/browserGeolocator'
 import { FixedGeolocator, positionFromSearch } from './infra/fixedGeolocator'
 import { GpxRouteParser } from './infra/gpxRouteParser'
@@ -22,6 +23,7 @@ import { SupabaseSignalisationStore } from './infra/supabaseSignalisationStore'
 import { createMap, createRouteLayers, createSignalisationLayer, showUserPosition } from './ui/map'
 import { createBottomNav } from './ui/bottomNav'
 import { createImportModal } from './ui/importModal'
+import { playScoreEffect } from './ui/scoreEffect'
 import { createScoreView, type ResultView } from './ui/scoreView'
 import { createSignalisationControl } from './ui/signalisationControl'
 import { createUserProfile } from './ui/userProfile'
@@ -92,6 +94,10 @@ async function completeStravaReturn(strava: StravaRoutes): Promise<string | null
   }
 }
 
+function redFlagTypes(preferences: SignalisationPreferences): Set<SignalisationType> {
+  return new Set(SIGNALISATION_TYPES.filter((type) => preferences[type] === 'veto'))
+}
+
 async function main() {
   const strava = createStravaLibrary()
   const stravaError = strava ? await completeStravaReturn(strava) : null
@@ -109,6 +115,7 @@ async function main() {
   const userProfile = createUserProfile(userStore.get(), (changes) => {
     const user = updateUser(userStore, changes)
     importModal.setActivities(user.activities)
+    signalisationLayer.setRedFlags(redFlagTypes(user.signalisationPreferences))
     // Le score se recalcule sur les données déjà reçues, sans rappeler les sources
     if (lastView) {
       lastView = { ...lastView, evaluation: applyPreferences(lastView.evaluation, lastView.profile, user.preferences, user.signalisationPreferences) }
@@ -128,6 +135,7 @@ async function main() {
         routeShown = true
         lastView = { routeName: route.name, profile, start, evaluation }
         scoreView.show(lastView)
+        playScoreEffect(evaluation.score.total, evaluation.score.vetoedBy !== null)
         importModal.setBusy(false)
         importModal.allowClose()
         importModal.close()
@@ -147,6 +155,7 @@ async function main() {
   })
 
   const signalisationLayer = createSignalisationLayer(map)
+  signalisationLayer.setRedFlags(redFlagTypes(userStore.get().signalisationPreferences))
   listActiveSignalisations(signalisationStore)
     .then((signalisations) => signalisationLayer.show(signalisations))
     .catch((error) => console.error(`Signalements indisponibles : ${error instanceof Error ? error.message : error}`))

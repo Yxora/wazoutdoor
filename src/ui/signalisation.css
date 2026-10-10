@@ -147,8 +147,8 @@
 }
 
 .od-tile__icon {
-  width: var(--od-size-icon);
-  height: var(--od-size-icon);
+  width: 36px;
+  height: 36px;
 }
 
 .od-info-row {
@@ -238,9 +238,81 @@
 
 .od-pin--critical {
   color: var(--od-status-closed);
+  border-color: var(--od-status-closed);
+}
+
+/* Forme de statut en coin : triangle (attention) ou octogone barré (bloquant) */
+.od-pin {
+  position: relative;
+}
+
+.od-pin__status {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--od-radius-pill);
+  background: var(--od-surface-raised);
+  box-shadow: var(--od-shadow-control);
+}
+
+.od-pin--legend .od-pin__status {
+  right: -4px;
+  bottom: -4px;
+  width: 14px;
+  height: 14px;
 }
 
 .od-popup {
   font: var(--od-body);
   color: var(--od-ink);
+}
+
+/* Red flag : onde rouge qui part du point et s'élargit en boucle */
+.od-pin--redflag {
+  position: relative;
+}
+
+.od-pin--redflag::before,
+.od-pin--redflag::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  box-sizing: border-box;
+  border: 3px solid var(--od-status-closed);
+  border-radius: var(--od-radius-pill);
+  opacity: 0;
+  pointer-events: none;
+  animation: od-redflag-wave 2s ease-out infinite;
+}
+
+.od-pin--redflag::after {
+  animation-delay: 1s;
+}
+
+@keyframes od-redflag-wave {
+  from {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+/* Sans animation : un anneau rouge fixe garde le signal */
+@media (prefers-reduced-motion: reduce) {
+  .od-pin--redflag::before {
+    animation: none;
+    opacity: 1;
+    transform: scale(1.3);
+  }
+
+  .od-pin--redflag::after {
+    display: none;
+  }
 }

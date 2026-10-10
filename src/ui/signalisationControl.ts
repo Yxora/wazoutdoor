@@ -1,7 +1,8 @@
 import type { LocationResult } from '../application/ports'
 import type { Coordinates } from '../domain/coordinates'
 import { SIGNALISATION_TYPE_LABEL, SIGNALISATION_TYPES, type SignalisationType } from '../domain/signalisation'
-import { CLOSE_ICON_PATH, LOCATION_ICON_PATH, odIcon, TYPE_ICON_PATH } from './signalisationIcons'
+import { pictoIcon } from './pictos'
+import { CLOSE_ICON_PATH, LOCATION_ICON_PATH, odIcon } from './signalisationIcons'
 
 export interface SignalisationInput {
   position: Coordinates
@@ -165,7 +166,9 @@ export function createSignalisationControl(deps: SignalisationControlDeps): Sign
       tile.type = 'button'
       tile.className = 'od-tile'
       tile.setAttribute('aria-pressed', String(type === selectedType))
-      tile.append(icon(TYPE_ICON_PATH[type], 24, 'od-tile__icon'), document.createTextNode(SIGNALISATION_TYPE_LABEL[type]))
+      const picto = pictoIcon(type, 36)
+      picto.setAttribute('class', 'od-tile__icon')
+      tile.append(picto, document.createTextNode(SIGNALISATION_TYPE_LABEL[type]))
       tile.addEventListener('click', () => {
         selectedType = type
         for (const t of tiles) t.setAttribute('aria-pressed', String(t === tile))

@@ -947,3 +947,157 @@ path.user-dot {
 .import-modal .source-switch label {
   min-width: 0;
 }
+
+/* Animation du score : confettis (80 à 100) ou pluie (0 à 20), par-dessus la carte, sans bloquer les clics */
+.score-effect {
+  position: fixed;
+  z-index: 1040;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.score-effect span {
+  position: absolute;
+  top: -40px;
+}
+
+.score-effect--confetti span {
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  animation: score-confetti-fall linear forwards;
+}
+
+.score-effect--rain span {
+  width: 2px;
+  border-radius: 2px;
+  background: var(--od-picto-water);
+  opacity: 0.8;
+  animation: score-rain-fall linear infinite;
+}
+
+@keyframes score-confetti-fall {
+  to {
+    transform: translate(var(--drift), 110vh) rotate(var(--spin));
+  }
+}
+
+@keyframes score-rain-fall {
+  to {
+    transform: translate(-30px, 110vh);
+  }
+}
+
+/* Red flag : une personne ouvre la porte, regarde dehors, la referme et retourne sur son canapé (7 s) */
+.score-scene {
+  position: fixed;
+  z-index: 1040;
+  top: 18%;
+  left: 50%;
+  width: min(360px, calc(100vw - 2 * var(--od-space-4)));
+  padding: var(--od-space-2);
+  box-sizing: border-box;
+  border-radius: var(--od-radius-lg);
+  background: var(--od-surface-raised);
+  box-shadow: var(--od-shadow-sheet);
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: scene-fade 7s ease-in-out forwards;
+}
+
+.score-scene svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.scene__door {
+  transform-origin: 30px 100px;
+  animation: scene-door 6.5s ease-in-out forwards;
+}
+
+.scene__hero {
+  animation: scene-hero 6.5s ease-in-out forwards;
+}
+
+.scene__bob {
+  animation: scene-bob 0.35s ease-in-out infinite alternate;
+}
+
+.scene__rain {
+  animation: scene-rain 0.5s linear infinite;
+}
+
+.scene__bubble {
+  opacity: 0;
+  animation: scene-bubble 6.5s forwards;
+}
+
+@keyframes scene-fade {
+  0%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes scene-door {
+  0%,
+  24% {
+    transform: scaleX(1);
+  }
+  34%,
+  52% {
+    transform: scaleX(0.15);
+  }
+  62%,
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes scene-hero {
+  0% {
+    transform: translate(255px, 12px);
+  }
+  8% {
+    transform: translate(255px, 0);
+  }
+  22%,
+  62% {
+    transform: translate(135px, 0);
+  }
+  80% {
+    transform: translate(255px, 0);
+  }
+  90%,
+  100% {
+    transform: translate(255px, 12px);
+  }
+}
+
+@keyframes scene-bob {
+  to {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes scene-rain {
+  to {
+    transform: translateY(14px);
+  }
+}
+
+@keyframes scene-bubble {
+  0%,
+  90% {
+    opacity: 0;
+  }
+  96%,
+  100% {
+    opacity: 1;
+  }
+}

@@ -222,7 +222,7 @@ export function createImportModal(
 ): ImportModal {
   let gpxText: string | null = null
   let canClose = false
-  let source: Source = library?.isConnected() ? 'strava' : 'gpx'
+  let source = 'gpx' as Source
 
   const dialog = el('dialog', { className: 'modal import-modal' })
   dialog.setAttribute('aria-labelledby', 'import-title')

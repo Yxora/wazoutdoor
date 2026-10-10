@@ -50,7 +50,7 @@ export interface Profile {
 export const PROFILES: Record<ProfileId, Profile> = {
   randonneur: {
     id: 'randonneur',
-    label: 'Randonneur·se',
+    label: 'Randonnée',
     flatSpeedKmh: 5,
     climbMetersPerHour: 600,
     waterGapMaxKm: 10,
@@ -59,7 +59,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
   },
   traileur: {
     id: 'traileur',
-    label: 'Traileur·se',
+    label: 'Trail',
     flatSpeedKmh: 8,
     climbMetersPerHour: 900,
     waterGapMaxKm: 12,

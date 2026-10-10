@@ -3,7 +3,8 @@ import 'leaflet/dist/leaflet.css'
 import type { Coordinates } from '../domain/coordinates'
 import { PLACE_CATEGORY_LABEL, type Place, type PlaceCategory } from '../domain/place'
 import type { Route } from '../domain/route'
-import { isCritical, SIGNALISATION_TYPE_LABEL, type Signalisation } from '../domain/signalisation'
+import { isCritical, SIGNALISATION_TYPE_LABEL, type Signalisation, type SignalisationType } from '../domain/signalisation'
+import { pictoIcon } from './pictos'
 import { CLOSED_STATUS_ICON_PATH, odIcon, WARNING_ICON_PATH } from './signalisationIcons'
 import logoUrl from './assets/logo.svg'
 
@@ -53,21 +54,26 @@ export function badge(style: MarkerStyle): HTMLElement {
 }
 
 /**
- * Pastille « danger signalé » : forme de statut, jamais la couleur seule. Chart WazeOutdoor.
- * Attention (triangle, orange) pour la plupart des signalements, bloquant (octogone barré, rouge)
- * pour les dangers graves (ex. feu de forêt).
+ * Pastille « danger signalé » : le picto dit quoi (planche des pictos d'imprévus), la gravité reste portée par une forme de statut
+ * en coin, jamais par la couleur seule. Attention (triangle, orange) pour la plupart des signalements, bloquant (octogone barré,
+ * rouge) pour les dangers graves (ex. feu de forêt). Chart WazeOutdoor.
  */
-function dangerPinBadge(critical: boolean, legend = false): HTMLElement {
+function dangerPinBadge(type: SignalisationType, legend = false, redFlag = false): HTMLElement {
+  const critical = isCritical(type)
   const element = document.createElement('span')
   const modifier = critical ? 'od-pin--critical' : ''
-  element.className = [legend ? 'od-pin od-pin--legend' : 'od-pin', modifier].filter(Boolean).join(' ')
-  element.append(odIcon(critical ? CLOSED_STATUS_ICON_PATH : WARNING_ICON_PATH, legend ? 16 : 20))
+  const wave = redFlag ? 'od-pin--redflag' : ''
+  element.className = [legend ? 'od-pin od-pin--legend' : 'od-pin', modifier, wave].filter(Boolean).join(' ')
+  const status = document.createElement('span')
+  status.className = 'od-pin__status'
+  status.append(odIcon(critical ? CLOSED_STATUS_ICON_PATH : WARNING_ICON_PATH, legend ? 10 : 14))
+  element.append(pictoIcon(type, legend ? 20 : 28), status)
   return element
 }
 
-function dangerPinIcon(signalisation: Signalisation): L.DivIcon {
+function dangerPinIcon(signalisation: Signalisation, redFlag: boolean): L.DivIcon {
   return L.divIcon({
-    html: dangerPinBadge(isCritical(signalisation.type)),
+    html: dangerPinBadge(signalisation.type, false, redFlag),
     className: 'map-marker',
     iconSize: [40, 40],
     iconAnchor: [20, 20],
@@ -118,8 +124,8 @@ function addLegend(map: L.Map): void {
       legendRow(badge(START_STYLE), START_STYLE.label),
       ...LEGEND_CATEGORIES.map((category) => legendRow(badge(CATEGORY_STYLE[category]), CATEGORY_STYLE[category].label)),
       legendRow(dot, 'Votre position'),
-      legendRow(dangerPinBadge(false, true), 'Danger signalé'),
-      legendRow(dangerPinBadge(true, true), 'Danger grave (ex. feu de forêt)'),
+      legendRow(dangerPinBadge('arbre', true), 'Danger signalé (le picto dit lequel)'),
+      legendRow(dangerPinBadge('incendie', true), 'Danger grave (ex. feu de forêt)'),
     )
 
     box.append(summary, list)
@@ -245,28 +251,80 @@ function signalisationPopup(signalisation: Signalisation): HTMLElement {
 export interface SignalisationLayer {
   show(signalisations: Signalisation[]): void
   add(signalisation: Signalisation): void
+  /** Types réglés sur « Red flag » par l'utilisateur·rice : leurs points émettent une onde rouge */
+  setRedFlags(types: ReadonlySet<SignalisationType>): void
+}
+
+// Deux pastilles plus proches que cela (en pixels) se chevauchent : on les écarte
+const PIN_OVERLAP_PX = 40
+const PIN_SPACING_PX = 46
+
+/**
+ * Position d'affichage de chaque signalement : les pastilles qui se superposent à l'échelle actuelle sont disposées
+ * en cercle autour de leur centroïde. Seul l'affichage bouge, les positions signalées ne changent pas.
+ */
+function spreadOverlapping(map: L.Map, signalisations: Signalisation[]): L.LatLng[] {
+  const zoom = map.getZoom()
+  const points = signalisations.map((s) => map.project([s.position.lat, s.position.lng], zoom))
+  const groups: number[][] = []
+  points.forEach((point, index) => {
+    const group = groups.find((members) => members.some((m) => points[m].distanceTo(point) < PIN_OVERLAP_PX))
+    if (group) group.push(index)
+    else groups.push([index])
+  })
+
+  const placed: L.LatLng[] = []
+  for (const members of groups) {
+    const centerX = members.reduce((sum, m) => sum + points[m].x, 0) / members.length
+    const centerY = members.reduce((sum, m) => sum + points[m].y, 0) / members.length
+    if (members.length === 1) {
+      placed[members[0]] = map.unproject(points[members[0]], zoom)
+      continue
+    }
+    // Rayon pour que deux pastilles voisines restent à PIN_SPACING_PX l'une de l'autre ; la première est en haut
+    const radius = PIN_SPACING_PX / (2 * Math.sin(Math.PI / members.length))
+    members.forEach((m, rank) => {
+      const angle = -Math.PI / 2 + (2 * Math.PI * rank) / members.length
+      placed[m] = map.unproject(L.point(centerX + radius * Math.cos(angle), centerY + radius * Math.sin(angle)), zoom)
+    })
+  }
+  return placed
 }
 
 export function createSignalisationLayer(map: L.Map): SignalisationLayer {
   const layer = L.layerGroup().addTo(map)
+  let signalisations: Signalisation[] = []
+  let redFlags: ReadonlySet<SignalisationType> = new Set()
 
-  const markerFor = (signalisation: Signalisation) => {
+  const markerFor = (signalisation: Signalisation, position: L.LatLng) => {
     const label = SIGNALISATION_TYPE_LABEL[signalisation.type]
-    return L.marker([signalisation.position.lat, signalisation.position.lng], {
-      icon: dangerPinIcon(signalisation),
+    return L.marker(position, {
+      icon: dangerPinIcon(signalisation, redFlags.has(signalisation.type)),
       title: label,
       alt: label,
     }).bindPopup(signalisationPopup(signalisation))
   }
 
+  const render = () => {
+    layer.clearLayers()
+    const positions = spreadOverlapping(map, signalisations)
+    signalisations.forEach((signalisation, index) => markerFor(signalisation, positions[index]).addTo(layer))
+  }
+  // À chaque zoom, des pastilles se rapprochent ou s'éloignent
+  map.on('zoomend', render)
+
   return {
-    show(signalisations) {
-      layer.clearLayers()
-      for (const signalisation of signalisations) markerFor(signalisation).addTo(layer)
+    show(next) {
+      signalisations = next
+      render()
     },
     add(signalisation) {
-      markerFor(signalisation).addTo(layer)
+      signalisations = [...signalisations, signalisation]
+      render()
+    },
+    setRedFlags(types) {
+      redFlags = types
+      render()
     },
   }
 }
-
