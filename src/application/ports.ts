@@ -3,6 +3,7 @@ import type { HourlyForecast } from '../domain/forecast'
 import type { Place } from '../domain/place'
 import type { BoundingBox, Route } from '../domain/route'
 import type { Signalisation } from '../domain/signalisation'
+import type { User } from '../domain/user'
 
 export type LocationResult =
   | { ok: true; position: Coordinates }
@@ -82,4 +83,9 @@ export interface RouteLibrary {
   disconnect(): void
   list(): Promise<RouteSummary[]>
   gpx(id: string): Promise<string>
+}
+
+export interface UserStore {
+  get(): User
+  save(user: User): void
 }

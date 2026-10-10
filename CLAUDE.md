@@ -50,7 +50,7 @@ Critères du jury : validation marché, business model, exécution (MVP, design)
 
 Priorité retenue dans `guidelines/idees-solutions.md` : une **webapp** pour la démo (carte des imprévus, vérification d'un itinéraire GPX, formulaire de signalement). L'API partenaires et l'app Garmin restent au stade de la présentation ou de la maquette. Viser une démo simple et fiable sur scène plutôt qu'un produit complet.
 
-**État actuel** : prototype du **problème 1** (sortir seul·e sans angoisse). L'utilisateur choisit un profil (randonneur·se, traileur·se, vététiste), une heure de départ et un fichier GPX (ou un exemple Schlucht-Hohneck). Le cas d'usage `evaluateRoute` calcule un **score de sérénité** sur 5 critères, avec le détail, la source et la fraîcheur de chacun :
+**État actuel** : prototype du **problème 1** (sortir seul·e sans angoisse). L'utilisateur choisit un profil (randonneur·se, traileur·se, vététiste), une heure de départ et un fichier GPX (ou un exemple Schlucht-Hohneck). Le cas d'usage `evaluateRoute` calcule un **score de sérénité** sur 6 critères, avec le détail, la source et la fraîcheur de chacun :
 
 | Critère | Source | Adaptateur |
 |---|---|---|
@@ -59,10 +59,15 @@ Priorité retenue dans `guidelines/idees-solutions.md` : une **webapp** pour la 
 | Météo prévue pendant la sortie : pluie, froid, chaleur (canicule), vent, orage, heure par heure sur la durée estimée, corrigée de l'altitude moyenne | Open-Meteo (usage non commercial, jusqu'à 16 jours) | `infra/openMeteoForecast.ts`, règles et seuils dans `domain/forecast.ts` |
 | Points d'eau | refuges.info | `infra/refugesInfoPlaces.ts` |
 | Abris et repli | refuges.info | `infra/refugesInfoPlaces.ts` |
+| Signalements sur le parcours (actifs, dans la zone d'effet du type : 150 m par défaut, 3 km pour la chasse ; hypothèses, `domain/signalisation.ts`) | Signalements Wazoutdoor (`SignalisationStore`) | `infra/supabaseSignalisationStore.ts`, `infra/localSignalisationStore.ts` |
 
 Une source en échec rend son critère « indisponible » : il est exclu du score et signalé, jamais compté comme favorable. Un score n'est « serein » que s'il n'y a aucune alerte. Les vitesses et seuils par profil (`domain/profile.ts`) sont des **hypothèses**, pas des valeurs validées. Le tracé d'exemple (`ui/samples/hohneck-exemple.gpx`) vient du service d'itinéraire pédestre de l'IGN.
 
 Sur la carte, chaque catégorie de lieu a une couleur **et** un glyphe différents (point d'eau, cabane non gardée, refuge gardé, gîte d'étape), plus le départ du tracé, avec une légende repliable (`ui/map.ts`). La catégorie (`PlaceCategory`) sert à l'affichage, le rôle (`PlaceKind`, eau ou abri) au calcul du score.
+
+**Utilisateur fictif (démo de la personnalisation)** : Julie (`domain/user.ts`, `DEMO_USER`, préférences gardées dans `localStorage` par `infra/localUserStore.ts`). Elle choisit ses activités (le panel ne propose que ces profils) et, pour chaque critère, un mode, en faisant glisser le critère dans un tableau à 3 colonnes : **Ignorer** (exclu du score), **Prendre en compte** (pondéré, par défaut pour tous les critères) ou **Red flag** (met le score à 0 si le critère est en alerte). Un second tableau identique règle le traitement de chaque **type de signalement** (arbre tombé, chasse en cours... ; le feu de forêt reste signalable et visible sur la carte mais n'entre pas dans le score) ; un type en Red flag présent dans sa zone d'effet met le score à 0. Le score se recalcule sans rappeler les sources (`applyPreferences`). Vue : `ui/userProfile.ts`. Valeurs de démo, pas des données d'enquête.
+
+**Navigation mobile** : menu du bas (`ui/bottomNav.ts`) avec trois onglets. **Signaler** lance le signalement à la position GPS (`ui/signalisationControl.ts`, plus de bouton flottant). **Planifier** affiche le formulaire d'import de tracé (GPX, Strava) et le résultat. **Personnaliser** affiche le profil de l'utilisateur en plein écran (la carte est masquée). Toucher l'onglet actif ferme le panneau. Les vues sont pilotées par `data-view` sur `#panel`.
 
 **Import Strava** : l'utilisateur·rice connecte son compte Strava (OAuth2, scopes `read,read_all`) et choisit l'un de ses itinéraires, dont le GPX alimente le flux existant. Port `RouteLibrary`, adaptateur `infra/stravaRoutes.ts`, cas d'usage `application/listLibraryRoutes.ts`. L'échange du code et le refresh du token passent par la Edge Function Supabase `supabase/functions/strava-token` (le secret client y reste ; l'API v3 elle-même autorise le CORS). Le jeton est gardé dans `sessionStorage`. Configuration : `VITE_STRAVA_CLIENT_ID`, secrets Supabase `STRAVA_CLIENT_ID` et `STRAVA_CLIENT_SECRET`, domaine de callback de l'app Strava. À vérifier : les conditions d'usage de l'API Strava et les quotas d'une app non validée.
 

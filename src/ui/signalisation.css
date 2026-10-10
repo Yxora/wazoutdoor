@@ -1,46 +1,11 @@
 /* Composants od-* : bouton Signaler, feuilles et contrôles associés. Chart WazeOutdoor. */
 
-.od-fab {
-  position: fixed;
-  z-index: 1000;
-  right: var(--od-space-4);
-  bottom: var(--od-space-4);
-  width: 64px;
-  height: 64px;
-  box-sizing: border-box;
-  border: 4px solid var(--od-surface-raised);
-  border-radius: var(--od-radius-pill);
-  background: var(--od-brand);
-  color: var(--od-ink-inverse);
-  box-shadow: 0 6px 18px rgb(27 36 32 / 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.od-fab:hover {
-  background: var(--od-brand-pressed);
-}
-
-.od-fab:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-
-.od-fab:focus-visible,
 .od-button:focus-visible,
 .od-tile:focus-visible,
 .od-textarea:focus-visible,
 .od-sheet__close:focus-visible {
   outline: none;
   box-shadow: var(--od-focus-ring);
-}
-
-@media (max-width: 600px) {
-  .od-fab {
-    bottom: calc(55vh + var(--od-space-4));
-  }
 }
 
 .od-backdrop {

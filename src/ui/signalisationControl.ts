@@ -1,7 +1,7 @@
 import type { LocationResult } from '../application/ports'
 import type { Coordinates } from '../domain/coordinates'
 import { SIGNALISATION_TYPE_LABEL, SIGNALISATION_TYPES, type SignalisationType } from '../domain/signalisation'
-import { CLOSE_ICON_PATH, LOCATION_ICON_PATH, odIcon, PLUS_ICON_PATH, TYPE_ICON_PATH } from './signalisationIcons'
+import { CLOSE_ICON_PATH, LOCATION_ICON_PATH, odIcon, TYPE_ICON_PATH } from './signalisationIcons'
 
 export interface SignalisationInput {
   position: Coordinates
@@ -105,29 +105,27 @@ function infoRow(iconPath: string, title: string, detail: string): HTMLElement {
   return row
 }
 
+export interface SignalisationControl {
+  /** Lance le signalement d'un danger à la position GPS actuelle */
+  start(): void
+}
+
 /**
- * Bouton « Signaler » (chart WazeOutdoor) : signale un danger à l'instant, sur la position GPS actuelle.
+ * Signalement d'un danger à l'instant, sur la position GPS actuelle (chart WazeOutdoor).
+ * Déclenché par l'onglet « Signaler » du menu du bas.
  */
-export function createSignalisationControl(deps: SignalisationControlDeps): void {
+export function createSignalisationControl(deps: SignalisationControlDeps): SignalisationControl {
   const { getCurrentPosition, onSubmit } = deps
-
-  const fab = document.createElement('button')
-  fab.type = 'button'
-  fab.className = 'od-fab'
-  fab.title = 'Signaler un danger'
-  fab.setAttribute('aria-label', 'Signaler un danger à ma position actuelle')
-  fab.append(icon(PLUS_ICON_PATH, 26, ''))
-  document.body.append(fab)
-
-  fab.addEventListener('click', startPositionReport)
+  let locating = false
 
   async function startPositionReport() {
-    fab.disabled = true
+    if (locating) return
+    locating = true
     const loading = createSheet('Signaler un danger', 'Recherche de votre position…')
     loading.open()
     const result = await getCurrentPosition()
     loading.close()
-    fab.disabled = false
+    locating = false
 
     if (!result.ok) {
       const errorSheet = createSheet('Position indisponible', '')
@@ -222,4 +220,6 @@ export function createSignalisationControl(deps: SignalisationControlDeps): void
 
     sheet.open()
   }
+
+  return { start: () => void startPositionReport() }
 }
