@@ -6,6 +6,8 @@ import type { ProtectedArea } from '../domain/protectedArea'
 import type { Route } from '../domain/route'
 import { SIGNALISATION_TYPE_LABEL, type Signalisation, type SignalisationType } from '../domain/signalisation'
 import { pictoIcon } from './pictos'
+import { isDisplayablePhoto } from './photo'
+import { openPhotoViewer } from './photoViewer'
 import { odIcon, WARNING_ICON_PATH } from './signalisationIcons'
 import logoUrl from './assets/logo.svg'
 
@@ -266,12 +268,28 @@ function signalisationPopup(signalisation: Signalisation): HTMLElement {
   box.append(title)
   if (signalisation.description) box.append(document.createElement('br'), signalisation.description)
   box.append(document.createElement('br'), `Signalé ${relativeTimeLabel(signalisation.createdAt)}`)
+  const photoUrl = signalisation.photoUrl
+  if (isDisplayablePhoto(photoUrl)) {
+    const thumb = document.createElement('button')
+    thumb.type = 'button'
+    thumb.className = 'od-popup__thumb'
+    thumb.setAttribute('aria-label', 'Agrandir la photo du signalement')
+    const img = document.createElement('img')
+    img.src = photoUrl
+    img.alt = 'Photo du signalement'
+    img.loading = 'lazy'
+    thumb.append(img)
+    thumb.addEventListener('click', () => openPhotoViewer(photoUrl, `Photo : ${SIGNALISATION_TYPE_LABEL[signalisation.type]}`))
+    box.append(thumb)
+  }
   return box
 }
 
 export interface SignalisationLayer {
   show(signalisations: Signalisation[]): void
   add(signalisation: Signalisation): void
+  /** Centre la carte sur le signalement et ouvre sa fenêtre */
+  focus(signalisation: Signalisation): void
   /** Types réglés sur « Red flag » par l'utilisateur·rice : leurs points émettent une onde rouge */
   setRedFlags(types: ReadonlySet<SignalisationType>): void
 }
@@ -326,10 +344,16 @@ export function createSignalisationLayer(map: L.Map): SignalisationLayer {
     }).bindPopup(signalisationPopup(signalisation))
   }
 
+  const markers = new Map<string, L.Marker>()
+
   const render = () => {
     layer.clearLayers()
+    markers.clear()
     const positions = spreadOverlapping(map, signalisations)
-    signalisations.forEach((signalisation, index) => markerFor(signalisation, positions[index]).addTo(layer))
+    signalisations.forEach((signalisation, index) => {
+      const marker = markerFor(signalisation, positions[index]).addTo(layer)
+      markers.set(signalisation.id, marker)
+    })
   }
   // À chaque zoom, des pastilles se rapprochent ou s'éloignent
   map.on('zoomend', render)
@@ -342,6 +366,11 @@ export function createSignalisationLayer(map: L.Map): SignalisationLayer {
     add(signalisation) {
       signalisations = [...signalisations, signalisation]
       render()
+    },
+    focus(signalisation) {
+      // Le zoom relance le rendu (zoomend) : on rouvre la fenêtre sur le marqueur recréé une fois la carte arrivée
+      map.once('moveend', () => markers.get(signalisation.id)?.openPopup())
+      map.setView([signalisation.position.lat, signalisation.position.lng], Math.max(map.getZoom(), 16))
     },
     setRedFlags(types) {
       redFlags = types

@@ -1,7 +1,11 @@
-import { odIcon, SLIDERS_ICON_PATH, VERIFY_ICON_PATH, WARNING_ICON_PATH } from './signalisationIcons'
+import { MAP_ICON_PATH, odIcon, SLIDERS_ICON_PATH, VERIFY_ICON_PATH, WARNING_ICON_PATH } from './signalisationIcons'
 
 export interface BottomNavActions {
   onReport(): void
+  /** Changement d'onglet : la page Signaler se ferme */
+  onLeaveReport(): void
+  /** Mode consultation : ne laisse que la carte (ferme les modales et le panneau) */
+  onConsult(): void
   onPlan(): void
 }
 
@@ -16,31 +20,63 @@ function tab(label: string, iconPath: string): HTMLButtonElement {
 }
 
 /**
- * Menu du bas : Signaler (lance le signalement), Vérifier (rouvre la modale d'import) et Personnaliser (affiche le panneau).
+ * Menu du bas : Signaler (onglet actif par défaut, lance le signalement), Consulter (la carte seule), Vérifier (rouvre la modale d'import) et Personnaliser (affiche le panneau).
  * Toucher l'onglet Personnaliser quand il est actif ferme le panneau et laisse toute la place à la carte.
  */
-export function createBottomNav(panel: HTMLElement, actions: BottomNavActions): void {
+export interface BottomNav {
+  /** Bascule sur la carte seule (après un signalement) */
+  showMap(): void
+}
+
+export function createBottomNav(panel: HTMLElement, actions: BottomNavActions): BottomNav {
   const report = tab('Signaler', WARNING_ICON_PATH)
+  const consult = tab('Consulter', MAP_ICON_PATH)
   const plan = tab('Vérifier', VERIFY_ICON_PATH)
   const custom = tab('Personnaliser', SLIDERS_ICON_PATH)
 
-  function showCustom(visible: boolean) {
-    panel.dataset.view = visible ? 'custom' : ''
-    if (visible) custom.setAttribute('aria-current', 'page')
-    else custom.removeAttribute('aria-current')
+  // Signaler est l'onglet par défaut ; Consulter le remplace tant qu'on ne repasse pas par un autre onglet
+  let base = report
+
+  function select(current: HTMLButtonElement) {
+    for (const button of [report, consult, custom]) {
+      if (button === current) button.setAttribute('aria-current', 'page')
+      else button.removeAttribute('aria-current')
+    }
   }
 
-  report.addEventListener('click', actions.onReport)
-  plan.addEventListener('click', () => {
+  function showCustom(visible: boolean) {
+    panel.dataset.view = visible ? 'custom' : ''
+    select(visible ? custom : base)
+  }
+
+  report.addEventListener('click', () => {
+    base = report
     showCustom(false)
+    actions.onReport()
+  })
+  function showMap() {
+    base = consult
+    showCustom(false)
+    actions.onLeaveReport()
+    actions.onConsult()
+  }
+  consult.addEventListener('click', showMap)
+  plan.addEventListener('click', () => {
+    base = report
+    showCustom(false)
+    actions.onLeaveReport()
     actions.onPlan()
   })
-  custom.addEventListener('click', () => showCustom(panel.dataset.view !== 'custom'))
+  custom.addEventListener('click', () => {
+    actions.onLeaveReport()
+    showCustom(panel.dataset.view !== 'custom')
+  })
 
   const nav = document.createElement('nav')
   nav.className = 'bottom-nav'
   nav.setAttribute('aria-label', 'Navigation principale')
-  nav.append(report, plan, custom)
+  nav.append(report, consult, plan, custom)
   document.body.append(nav)
   showCustom(false)
+  return { showMap }
 }

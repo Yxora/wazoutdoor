@@ -55,6 +55,8 @@ export function odIcon(pathD: string, size = 24): SVGSVGElement {
 
 /** Icônes du menu du bas : tracé et réglages */
 export const ROUTE_ICON_PATH = '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/>'
+/** Carte pliée : consultation de la carte */
+export const MAP_ICON_PATH = '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>'
 export const VERIFY_ICON_PATH = '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>'
 export const SLIDERS_ICON_PATH = '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'
 
@@ -62,3 +64,6 @@ export const SLIDERS_ICON_PATH = '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circl
 export const BIKE_ICON_PATH = '<circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-8h5l3 8M10 8l3 8M9 6h3"/>'
 export const RUN_ICON_PATH = '<circle cx="14" cy="4.5" r="1.8"/><path d="M12 9l-3 3 3 2-2 6M12 9l4 2 3-1M12 14l3 2v4"/>'
 export const MOUNTAIN_ICON_PATH = '<path d="M3 20l6-11 4 6 3-4 5 9z"/>'
+
+/** Appareil photo, pour joindre une photo à un signalement */
+export const CAMERA_ICON_PATH = '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'

@@ -221,12 +221,12 @@ export function createImportModal(
   activities: ProfileId[] = Object.keys(PROFILES) as ProfileId[],
 ): ImportModal {
   let gpxText: string | null = null
-  let canClose = false
+  // La modale ne s'ouvre plus d'elle-même à l'arrivée (onglet Vérifier) : on peut toujours la refermer
+  let canClose = true
   let source = 'gpx' as Source
 
   const dialog = el('dialog', { className: 'modal import-modal' })
   dialog.setAttribute('aria-labelledby', 'import-title')
-  // Tant qu'aucun score n'est affiché, Échap ne doit pas laisser l'utilisateur devant une carte vide
   dialog.addEventListener('cancel', (event) => {
     if (!canClose) event.preventDefault()
   })
@@ -361,6 +361,5 @@ export function createImportModal(
     },
   }
 
-  modal.open()
   return modal
 }

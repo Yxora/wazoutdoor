@@ -73,6 +73,11 @@ export interface ProtectedAreaProvider {
   around(box: BoundingBox): Promise<ProtectedArea[]>
 }
 
+export interface PhotoStore {
+  /** Enregistre la photo (data URL JPEG) et renvoie l'adresse à mettre dans le signalement */
+  upload(id: string, dataUrl: string): Promise<string>
+}
+
 export interface SignalisationStore {
   save(signalisation: Signalisation): Promise<void>
   list(): Promise<Signalisation[]>

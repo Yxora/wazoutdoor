@@ -21,6 +21,8 @@ export interface Signalisation {
   description: string
   position: Coordinates
   createdAt: Date
+  /** Photo jointe pour qualifier le signalement (adresse publique) */
+  photoUrl?: string
 }
 
 export const SIGNALISATION_TYPE_LABEL: Record<SignalisationType, string> = {
@@ -74,6 +76,7 @@ export interface NewSignalisation {
   type: SignalisationType
   description: string
   position: Coordinates
+  photoUrl?: string
 }
 
 /** Signalé à l'instant, sur la position GPS de l'utilisateur·rice */
@@ -84,6 +87,7 @@ export function createSignalisation(input: NewSignalisation, now = new Date()): 
     description: input.description.trim().slice(0, DESCRIPTION_MAX_LENGTH),
     position: input.position,
     createdAt: now,
+    ...(input.photoUrl ? { photoUrl: input.photoUrl } : {}),
   }
 }
 

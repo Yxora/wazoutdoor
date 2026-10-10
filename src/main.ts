@@ -2,7 +2,7 @@ import { checkDatabase } from './application/checkDatabase'
 import { applyPreferences, evaluateRoute, type EvaluationDeps } from './application/evaluateRoute'
 import { listActiveSignalisations } from './application/listSignalisations'
 import { locateUser } from './application/locateUser'
-import type { SignalisationStore } from './application/ports'
+import type { PhotoStore, SignalisationStore } from './application/ports'
 import { reportSignalisation } from './application/reportSignalisation'
 import { updateUser } from './application/updateUser'
 import { PROFILES } from './domain/profile'
@@ -12,6 +12,7 @@ import { FixedGeolocator, positionFromSearch } from './infra/fixedGeolocator'
 import { GpxRouteParser } from './infra/gpxRouteParser'
 import { IgnElevation } from './infra/ignElevation'
 import { IgnProtectedAreas } from './infra/ignProtectedAreas'
+import { LocalPhotoStore } from './infra/localPhotoStore'
 import { LocalSignalisationStore } from './infra/localSignalisationStore'
 import { LocalUserStore } from './infra/localUserStore'
 import { MeteoFranceVigilance } from './infra/meteoFranceVigilance'
@@ -21,6 +22,7 @@ import { OpenMeteoForecast } from './infra/openMeteoForecast'
 import { RefugesInfoPlaces } from './infra/refugesInfoPlaces'
 import { StravaRoutes } from './infra/stravaRoutes'
 import { SupabaseHealth } from './infra/supabaseHealth'
+import { SupabasePhotoStore } from './infra/supabasePhotoStore'
 import { SupabaseSignalisationStore } from './infra/supabaseSignalisationStore'
 import { createMap, createRouteLayers, createSignalisationLayer, showUserPosition } from './ui/map'
 import { createBottomNav } from './ui/bottomNav'
@@ -41,6 +43,9 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 // Signalements partagés entre tout le monde si Supabase est configuré, sinon stockage local au navigateur.
 const signalisationStore: SignalisationStore =
   supabaseUrl && supabaseAnonKey ? new SupabaseSignalisationStore(supabaseUrl, supabaseAnonKey) : new LocalSignalisationStore()
+
+// Photos des signalements : Supabase Storage si configuré, sinon gardées dans le navigateur avec le signalement
+const photoStore: PhotoStore = supabaseUrl && supabaseAnonKey ? new SupabasePhotoStore(supabaseUrl, supabaseAnonKey) : new LocalPhotoStore()
 
 const deps: EvaluationDeps = {
   elevation: new IgnElevation(),
@@ -104,6 +109,8 @@ function redFlagTypes(preferences: SignalisationPreferences): Set<SignalisationT
 
 async function main() {
   const strava = createStravaLibrary()
+  const params = new URLSearchParams(location.search)
+  const returnedFromStrava = params.has('code') || params.has('error')
   const stravaError = strava ? await completeStravaReturn(strava) : null
 
   const map = createMap(document.getElementById('map')!)
@@ -151,6 +158,8 @@ async function main() {
     userStore.get().activities,
   )
   if (stravaError) importModal.showError(stravaError)
+  // Au retour de Strava, on reprend sur Vérifier pour choisir un itinéraire
+  if (returnedFromStrava) importModal.open()
 
   // La localisation ne doit pas écraser le cadrage d'un tracé déjà affiché
   locateUser(geolocator).then((location) => {
@@ -166,16 +175,29 @@ async function main() {
 
   const signalisationControl = createSignalisationControl({
     getCurrentPosition: () => locateUser(geolocator),
-    onSubmit: async ({ position, type, description }) => {
-      const signalisation = await reportSignalisation(signalisationStore, { position, type, description })
+    onSubmit: async ({ position, type, description, photo }) => {
+      const signalisation = await reportSignalisation(signalisationStore, { position, type, description, photo }, photoStore)
       signalisationLayer.add(signalisation)
+      // Après l'envoi : retour sur la carte, centrée sur le nouveau signalement
+      nav.showMap()
+      signalisationLayer.focus(signalisation)
     },
   })
 
-  createBottomNav(document.getElementById('panel')!, { onReport: () => signalisationControl.start(), onPlan: () => {
+  const nav = createBottomNav(document.getElementById('panel')!, { onReport: () => {
+      scoreView.closeDetail()
+      importModal.close()
+      signalisationControl.start()
+    }, onLeaveReport: () => signalisationControl.close(), onConsult: () => {
+      scoreView.closeDetail()
+      importModal.close()
+    }, onPlan: () => {
       scoreView.closeDetail()
       importModal.toggle()
     } })
+
+  // Signaler est l'onglet par défaut : son écran s'ouvre dès l'arrivée (sauf au retour de Strava)
+  if (!returnedFromStrava) signalisationControl.start()
 
   checkSupabase()
 }

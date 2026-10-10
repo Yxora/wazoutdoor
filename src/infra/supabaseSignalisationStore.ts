@@ -8,6 +8,7 @@ interface SignalisationRow {
   lat: number
   lng: number
   created_at: string
+  photo_url?: string | null
 }
 
 function toRow(signalisation: Signalisation): SignalisationRow {
@@ -18,6 +19,8 @@ function toRow(signalisation: Signalisation): SignalisationRow {
     lat: signalisation.position.lat,
     lng: signalisation.position.lng,
     created_at: signalisation.createdAt.toISOString(),
+    // Omis sans photo : l'enregistrement marche même si la migration photo n'est pas encore appliquée
+    ...(signalisation.photoUrl ? { photo_url: signalisation.photoUrl } : {}),
   }
 }
 
@@ -28,6 +31,7 @@ function fromRow(row: SignalisationRow): Signalisation {
     description: row.description,
     position: { lat: row.lat, lng: row.lng },
     createdAt: new Date(row.created_at),
+    ...(row.photo_url ? { photoUrl: row.photo_url } : {}),
   }
 }
 

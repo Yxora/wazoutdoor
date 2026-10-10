@@ -311,3 +311,155 @@
     display: none;
   }
 }
+
+/* Photo d'un signalement */
+.od-button--secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--od-space-2);
+  background: var(--od-surface-raised);
+  color: var(--od-ink);
+  border: 1px solid var(--od-line);
+}
+
+.od-sheet__photo {
+  display: block;
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: var(--od-radius-md);
+}
+
+.od-popup__thumb {
+  display: block;
+  margin-top: var(--od-space-2);
+  padding: 0;
+  border: 1px solid var(--od-line);
+  border-radius: var(--od-radius-md);
+  overflow: hidden;
+  background: none;
+  cursor: zoom-in;
+}
+
+.od-popup__thumb img {
+  display: block;
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+}
+
+.od-popup__thumb:focus-visible,
+.photo-viewer__close:focus-visible {
+  outline: 3px solid var(--od-focus);
+  outline-offset: 2px;
+}
+
+/* Photo en plein écran, croix en haut à droite */
+.photo-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.9);
+}
+
+.photo-viewer__image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.photo-viewer__close {
+  position: absolute;
+  top: calc(var(--od-space-3) + env(safe-area-inset-top));
+  right: var(--od-space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--od-size-touch);
+  height: var(--od-size-touch);
+  border: none;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* Toast en bas de l'écran, au-dessus du menu */
+.od-toast {
+  position: fixed;
+  z-index: 2100;
+  left: 50%;
+  bottom: calc(var(--od-nav-height) + env(safe-area-inset-bottom) + var(--od-space-4));
+  transform: translateX(-50%);
+  max-width: calc(100vw - 2 * var(--od-space-4));
+  padding: var(--od-space-3) var(--od-space-4);
+  border-radius: var(--od-radius-md);
+  background: var(--od-ink);
+  color: var(--od-ink-inverse);
+  font: var(--od-label);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+  animation: od-toast-in 0.2s ease-out;
+}
+
+@keyframes od-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .od-toast {
+    animation: none;
+  }
+}
+
+/* Signaler : page à part entière au-dessus de la carte, le menu du bas reste visible */
+.report-page {
+  position: fixed;
+  z-index: 1090;
+  inset: 0 0 calc(var(--od-nav-height) + env(safe-area-inset-bottom)) 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--od-surface);
+}
+
+.report-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--od-space-3);
+  padding: calc(var(--od-space-4) + env(safe-area-inset-top)) var(--od-space-4) var(--od-space-3);
+}
+
+.report-page__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--od-space-4);
+  padding: var(--od-space-2) var(--od-space-4) var(--od-space-4);
+}
+
+.report-page__footer {
+  display: grid;
+  gap: var(--od-space-2);
+  padding: var(--od-space-3) var(--od-space-4);
+  background: var(--od-surface-raised);
+  border-top: 1px solid var(--od-line);
+}
+
+@media (min-width: 601px) {
+  .report-page {
+    inset: 0 0 calc(var(--od-nav-height) + var(--od-space-6)) 0;
+  }
+}
+
+/* Les règles display ci-dessus ne doivent pas écraser l'attribut hidden */
+.report-page [hidden] {
+  display: none;
+}
