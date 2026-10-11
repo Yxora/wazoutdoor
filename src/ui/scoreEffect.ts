@@ -1,7 +1,13 @@
+import type { Verdict } from '../domain/serenity'
+import { scoreRing, setScoreRingProgress, VERDICT_LABEL } from './scoreView'
+
 const GOOD_FROM = 80
 const BAD_UNTIL = 20
 const DURATION_MS = 4500
 const SCENE_MS = 7000
+/** Le cadran « pop » au centre de l'écran : apparition, remplissage de l'anneau, pause, disparition */
+const POP_MS = 3200
+const FILL_MS = 1400
 
 const CONFETTI_COLORS = ['--od-picto-blaze', '--od-picto-sun', '--od-picto-leaf', '--od-picto-water', '--od-status-ok']
 
@@ -44,6 +50,32 @@ const SCENE_SVG = `
   <g class="scene__bubble"><rect x="150" y="12" width="150" height="30" rx="10" style="fill:#fff"/><text x="225" y="32" text-anchor="middle" stroke="none" style="fill:var(--od-ink);font:700 14px var(--od-font-text)">Pas aujourd’hui…</text></g>
 </svg>`
 
+/** Cadran du score en gros au centre : il pop, l'anneau se remplit de 0 au score en comptant, puis il s'efface */
+function playScorePop(total: number, verdict: Verdict | null): void {
+  const pop = document.createElement('div')
+  pop.className = `score-pop score-pop--${verdict ?? 'unknown'}`
+  pop.setAttribute('aria-hidden', 'true')
+  const ring = scoreRing(total, 240)
+  setScoreRingProgress(ring, 0)
+  const caption = document.createElement('p')
+  caption.className = 'score-pop__caption'
+  caption.textContent = verdict ? VERDICT_LABEL[verdict] : ''
+  const card = document.createElement('div')
+  card.className = 'score-pop__card'
+  card.append(ring, caption)
+  pop.append(card)
+  document.body.append(pop)
+
+  const startedAt = performance.now()
+  const step = (now: number) => {
+    const progress = Math.min(1, (now - startedAt - 250) / FILL_MS)
+    if (progress > 0) setScoreRingProgress(ring, total * (1 - Math.pow(1 - progress, 3)))
+    if (progress < 1 && pop.isConnected) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+  window.setTimeout(() => pop.remove(), POP_MS)
+}
+
 function playScene(): void {
   const scene = document.createElement('div')
   scene.className = 'score-scene'
@@ -54,14 +86,18 @@ function playScene(): void {
 }
 
 /**
- * Animation plein écran à l'affichage d'un nouveau score : confettis de 80 à 100, pluie de 0 à 20,
- * et la scène du canapé quand un red flag met le score à 0.
+ * Animation plein écran à l'affichage d'un nouveau score : le cadran en gros au centre, avec confettis de 80 à 100,
+ * pluie de 0 à 20, puis la scène du canapé quand un red flag met le score à 0.
  * Purement décorative : aucun clic bloqué, désactivée si l'utilisateur·rice réduit les animations.
  */
-export function playScoreEffect(total: number | null, redFlag = false): void {
+export function playScoreEffect(total: number | null, redFlag = false, verdict: Verdict | null = null): void {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-  // Un red flag a sa propre scène, à la place de la pluie
-  if (redFlag) return playScene()
+  if (total !== null) playScorePop(total, verdict)
+  // Un red flag a sa propre scène, à la place de la pluie ; elle démarre quand le cadran s'efface
+  if (redFlag) {
+    window.setTimeout(playScene, POP_MS)
+    return
+  }
   if (total === null || (total > BAD_UNTIL && total < GOOD_FROM)) return
 
   const effect =

@@ -167,27 +167,102 @@ body {
 }
 
 .summary {
-  margin: 0 0 var(--od-space-3);
+  margin: 0 0 var(--od-space-4);
+}
+
+/* Distance, dénivelé et durée : trois cases côte à côte, y compris sur mobile */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--od-space-3);
+  margin: 0 0 var(--od-space-4);
+}
+
+.stat {
+  display: grid;
+  gap: var(--od-space-1);
+  padding: var(--od-space-2) var(--od-space-3);
+  border: 1px solid var(--od-line);
+  border-radius: var(--od-radius-md);
+  background: var(--od-surface-raised);
+  text-align: center;
+}
+
+.stat__label {
+  color: var(--od-ink-muted);
+  font: var(--od-caption);
+}
+
+.stat__value {
+  font-size: 1.125rem;
+}
+
+.stat__note {
+  color: var(--od-ink-muted);
+  font: var(--od-caption);
+}
+
+.note + .note {
+  margin-top: var(--od-space-3);
+}
+
+.note__title {
+  display: flex;
+  align-items: center;
+  gap: var(--od-space-2);
+  margin: 0 0 var(--od-space-1);
+  font: var(--od-label);
+}
+
+.note__text {
+  margin: 0;
 }
 
 /* Verdict : fond doux du statut, bordure et texte en couleur du statut, jamais la couleur seule (voir les libellés) */
 .score {
   display: flex;
-  align-items: baseline;
-  gap: var(--od-space-3);
-  padding: var(--od-space-3);
-  border: 2px solid var(--od-s);
-  border-radius: var(--od-radius-md);
-  background: var(--od-s-soft);
+  flex-direction: column;
+  align-items: center;
+  gap: var(--od-space-2);
+  margin: var(--od-space-3) 0;
   color: var(--od-s);
+  text-align: center;
 }
 
-.score__value {
-  font: var(--od-display);
+.score .score-ring__label {
+  font-size: 3rem;
 }
 
-.score__value small {
-  font: var(--od-caption);
+/* Anneau de score : piste neutre, arc en couleur du statut, pourcentage au centre */
+.score-ring {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+}
+
+.score-ring svg {
+  position: absolute;
+  inset: 0;
+}
+
+.score-ring__track {
+  stroke: color-mix(in srgb, var(--od-s) 20%, transparent);
+}
+
+.score-ring__arc {
+  stroke: var(--od-s);
+}
+
+.score-ring__label {
+  position: relative;
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.score-bar .score-ring__label {
+  font-size: 0.9rem;
 }
 
 .score__verdict {
@@ -271,6 +346,60 @@ body {
 
 .criterion__detail {
   margin: var(--od-space-2) 0 var(--od-space-1);
+}
+
+/* Carte repliée : titre et score sur une ligne, le détail s'ouvre au clic */
+.criterion__details > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--od-space-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.criterion__details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.criterion__details > summary::after {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: var(--od-space-1);
+  border-right: 2px solid var(--od-ink-muted);
+  border-bottom: 2px solid var(--od-ink-muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+
+.criterion__details[open] > summary::after {
+  transform: rotate(-135deg);
+}
+
+.criterion__details > summary:focus-visible {
+  outline: 2px solid var(--od-focus);
+  outline-offset: 2px;
+}
+
+.criterion__details > summary strong {
+  flex: 1;
+}
+
+.criterion__body {
+  margin-top: var(--od-space-2);
+  padding-top: var(--od-space-2);
+  border-top: 1px solid var(--od-line);
+}
+
+.criterion__body .criterion__status {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .criterion__details > summary::after {
+    transition: none;
+  }
 }
 
 .criterion__source {
@@ -1167,4 +1296,166 @@ path.user-dot {
 .map--hide-danger .map-marker--danger,
 .map--hide-position path.user-dot {
   display: none;
+}
+
+/* Détail du score : titre à gauche, bouton « info » en haut à droite */
+.score-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--od-space-3);
+  margin-bottom: var(--od-space-4);
+}
+
+.score-header h1 {
+  flex: 1;
+  margin: 0;
+}
+
+.info-button {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--od-line);
+  border-radius: var(--od-radius-pill);
+  background: var(--od-surface-raised);
+  color: var(--od-ink);
+  cursor: pointer;
+}
+
+/* Plus spécifique que `.modal button` (padding horizontal et hauteur tactile), qui décalait l'icône */
+.modal .info-button {
+  min-height: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--od-line);
+  border-radius: var(--od-radius-pill);
+}
+
+.info-button svg {
+  display: block;
+}
+
+.info-button:focus-visible {
+  outline: 2px solid var(--od-focus);
+  outline-offset: 2px;
+}
+
+/* Fenêtre des notes : par-dessus le détail du score */
+.info-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: var(--od-space-4);
+  background: rgb(0 0 0 / 0.5);
+}
+
+.info-dialog__box {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--od-space-3);
+  width: min(100%, 460px);
+  max-height: 85dvh;
+  padding: var(--od-space-4);
+  border-radius: 12px;
+  background: var(--od-surface-raised);
+  color: var(--od-ink);
+}
+
+.info-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--od-space-2);
+}
+
+.info-dialog__content {
+  overflow-y: auto;
+}
+
+/* Cadran du score en gros au centre de l'écran, à l'affichage d'un nouveau score (3,2 s, sans bloquer les clics) */
+.score-pop {
+  position: fixed;
+  z-index: 1060;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.score-pop--serene {
+  --od-s: var(--od-status-ok);
+}
+
+.score-pop--caution {
+  --od-s: var(--od-status-warn);
+}
+
+.score-pop--alert {
+  --od-s: var(--od-status-closed);
+}
+
+.score-pop--unknown {
+  --od-s: var(--od-status-unknown);
+}
+
+.score-pop__card {
+  display: grid;
+  justify-items: center;
+  gap: var(--od-space-2);
+  color: var(--od-s);
+  animation: score-pop 3.2s forwards;
+}
+
+.score-pop .score-ring__label {
+  font-size: 4rem;
+}
+
+/* Cadran : disque plein derrière l'anneau (pas de cadre rectangulaire), pour que le score se lise sur n'importe quel fond de carte */
+.score-pop .score-ring {
+  border-radius: 50%;
+  background: var(--od-surface-raised);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.3);
+}
+
+.score-pop .score-ring__track {
+  stroke: color-mix(in srgb, var(--od-s) 25%, var(--od-surface-raised));
+}
+
+.score-pop__caption {
+  padding: var(--od-space-1) var(--od-space-3);
+  border-radius: var(--od-radius-pill);
+  background: var(--od-surface-raised);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+
+.score-pop__caption {
+  margin: 0;
+  font: var(--od-label);
+}
+
+/* Pop : surgit en grossissant avec un petit rebond, reste, puis s'efface */
+@keyframes score-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+    animation-timing-function: cubic-bezier(0.2, 1.5, 0.4, 1);
+  }
+  12% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
 }

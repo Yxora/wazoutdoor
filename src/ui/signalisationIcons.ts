@@ -33,6 +33,7 @@ export const UNKNOWN_STATUS_ICON_PATH =
 
 export const PLUS_ICON_PATH = '<path d="M12 5v14M5 12h14"/>'
 export const CLOSE_ICON_PATH = '<path d="M6 6l12 12M18 6L6 18"/>'
+export const INFO_ICON_PATH = '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5v.5"/>'
 export const CHECK_ICON_PATH = '<path d="M5 12.5l4.5 4.5L19 7"/>'
 export const LOCATION_ICON_PATH = '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>'
 

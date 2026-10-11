@@ -153,7 +153,7 @@ async function main() {
         routeShown = true
         lastView = { routeName: route.name, profile, start, evaluation }
         scoreView.show(lastView)
-        playScoreEffect(evaluation.score.total, evaluation.score.vetoedBy !== null)
+        playScoreEffect(evaluation.score.total, evaluation.score.vetoedBy !== null, evaluation.score.verdict)
         importModal.setBusy(false)
         importModal.allowClose()
         importModal.close()
