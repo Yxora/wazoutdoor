@@ -35,6 +35,8 @@ jobs:
           VITE_STRAVA_CLIENT_ID: ${{ vars.VITE_STRAVA_CLIENT_ID }}
           # Clé Météo-France : intégrée au JavaScript du site, donc visible. Acceptable pour un prototype (clé à courte durée de vie)
           VITE_METEOFRANCE_API_KEY: ${{ secrets.VITE_METEOFRANCE_API_KEY }}
+          # Clé NASA FIRMS : même limite (visible dans le JavaScript). Lue dans les secrets, ou dans les variables du dépôt à défaut
+          VITE_FIRMS_API_KEY: ${{ secrets.VITE_FIRMS_API_KEY || vars.VITE_FIRMS_API_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
