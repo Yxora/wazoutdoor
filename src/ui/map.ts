@@ -77,27 +77,40 @@ function dangerPinBadge(type: SignalisationType, legend = false, redFlag = false
 function dangerPinIcon(signalisation: Signalisation, redFlag: boolean, toConfirm: boolean): L.DivIcon {
   return L.divIcon({
     html: dangerPinBadge(signalisation.type, false, redFlag, toConfirm, isGonePending(signalisation)),
-    className: 'map-marker',
+    className: 'map-marker map-marker--danger',
     iconSize: [40, 40],
     iconAnchor: [20, 20],
     popupAnchor: [0, -20],
   })
 }
 
-function markerIcon(style: MarkerStyle): L.DivIcon {
+function markerIcon(style: MarkerStyle, group: string): L.DivIcon {
   return L.divIcon({
     html: badge(style),
-    className: 'map-marker',
+    className: `map-marker map-marker--${group}`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
     popupAnchor: [0, -14],
   })
 }
 
-function legendRow(symbol: HTMLElement, label: string): HTMLElement {
+/**
+ * Groupes de la carte que la légende permet d'afficher ou de masquer. Le masquage passe par une classe CSS sur la carte
+ * (`map--hide-<groupe>`), donc il survit aux rechargements du tracé et des signalements.
+ */
+type LayerGroup = 'route' | PlaceCategory | 'protected' | 'danger' | 'position'
+
+function legendRow(map: L.Map, group: LayerGroup, symbol: HTMLElement, label: string): HTMLElement {
   const row = document.createElement('li')
   row.className = 'map-legend__row'
-  row.append(symbol, label)
+  const toggle = document.createElement('label')
+  toggle.className = 'map-legend__toggle'
+  const checkbox = document.createElement('input')
+  checkbox.type = 'checkbox'
+  checkbox.checked = !map.getContainer().classList.contains(`map--hide-${group}`)
+  checkbox.addEventListener('change', () => map.getContainer().classList.toggle(`map--hide-${group}`, !checkbox.checked))
+  toggle.append(checkbox, symbol, label)
+  row.append(toggle)
   return row
 }
 
@@ -123,18 +136,21 @@ function addLegend(map: L.Map): void {
     const zone = document.createElement('span')
     zone.className = 'map-legend__zone'
 
+    const hint = document.createElement('p')
+    hint.className = 'map-legend__hint'
+    hint.textContent = 'Cochez pour afficher ou masquer.'
+
     const list = document.createElement('ul')
     list.className = 'map-legend__list'
     list.append(
-      legendRow(line, 'Tracé'),
-      legendRow(badge(START_STYLE), START_STYLE.label),
-      ...LEGEND_CATEGORIES.map((category) => legendRow(badge(CATEGORY_STYLE[category]), CATEGORY_STYLE[category].label)),
-      legendRow(dot, 'Votre position'),
-      legendRow(zone, 'Zone protégée'),
-      legendRow(dangerPinBadge('arbre', true), 'Danger signalé (le picto dit lequel)'),
+      legendRow(map, 'route', line, 'Tracé et départ'),
+      ...LEGEND_CATEGORIES.map((category) => legendRow(map, category, badge(CATEGORY_STYLE[category]), CATEGORY_STYLE[category].label)),
+      legendRow(map, 'position', dot, 'Votre position'),
+      legendRow(map, 'protected', zone, 'Zone protégée'),
+      legendRow(map, 'danger', dangerPinBadge('arbre', true), 'Danger signalé (le picto dit lequel)'),
     )
 
-    box.append(summary, list)
+    box.append(summary, hint, list)
     return box
   }
 
@@ -231,7 +247,7 @@ export function createRouteLayers(map: L.Map): RouteLayers {
 
       const start = route.points[0]
       L.marker([start.lat, start.lng], {
-        icon: markerIcon(START_STYLE),
+        icon: markerIcon(START_STYLE, 'route'),
         title: START_STYLE.label,
         alt: START_STYLE.label,
         zIndexOffset: 1000,
@@ -240,7 +256,7 @@ export function createRouteLayers(map: L.Map): RouteLayers {
       for (const place of places) {
         const label = PLACE_CATEGORY_LABEL[place.category]
         L.marker([place.position.lat, place.position.lng], {
-          icon: markerIcon(CATEGORY_STYLE[place.category]),
+          icon: markerIcon(CATEGORY_STYLE[place.category], place.category),
           title: `${label} : ${place.name}`,
           alt: label,
         })

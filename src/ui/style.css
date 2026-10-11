@@ -1135,3 +1135,36 @@ path.user-dot {
     opacity: 1;
   }
 }
+
+.map-legend__hint {
+  margin: var(--od-space-1) 0 0;
+  color: var(--od-ink-muted, var(--od-ink));
+}
+
+.map-legend__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--od-space-2);
+  cursor: pointer;
+}
+
+.map-legend__toggle input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--od-brand);
+}
+
+/* Calques masqués depuis la légende : classe posée sur le conteneur de la carte */
+.map--hide-route path.route-line,
+.map--hide-route .map-marker--route,
+.map--hide-water .map-marker--water,
+.map--hide-hut .map-marker--hut,
+.map--hide-refuge .map-marker--refuge,
+.map--hide-lodge .map-marker--lodge,
+.map--hide-protected path.protected-area,
+.map--hide-danger .map-marker--danger,
+.map--hide-position path.user-dot {
+  display: none;
+}
