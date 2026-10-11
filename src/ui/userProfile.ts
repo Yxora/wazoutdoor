@@ -1,4 +1,5 @@
 import avatarUrl from './assets/avatar-julie.svg'
+import { createBrandLogo } from './brand'
 import { allowedModes, CRITERION_LABEL, effectiveMode, MODE_LABEL, PROFILES, type CriterionId, type CriterionMode, type ProfileId } from '../domain/profile'
 import { SCORED_SIGNALISATION_TYPES, SIGNALISATION_TYPE_LABEL } from '../domain/signalisation'
 import type { User } from '../domain/user'
@@ -183,6 +184,6 @@ export function createUserProfile(initial: User, onChange: (changes: UserChanges
   title.append(avatar, name)
   const typesTitle = document.createElement('h3')
   typesTitle.textContent = 'Types de signalements'
-  section.append(title, activities, criteriaBoard, typesTitle, typesBoard, message)
+  section.append(createBrandLogo(), title, activities, criteriaBoard, typesTitle, typesBoard, message)
   return section
 }

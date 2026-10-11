@@ -7,6 +7,7 @@ import type { CriterionPreferences, Profile } from '../domain/profile'
 import { ascentMeters, boundingBox, routeLengthMeters, sampleRoute, type Route, type SampledPoint } from '../domain/route'
 import {
   computeScore,
+  BREAK_MINUTES,
   estimateDurationMinutes,
   scoreDaylight,
   scoreFire,
@@ -55,7 +56,12 @@ export interface RouteSummary {
   distanceKm: number
   /** null quand ni le fichier GPX ni le service d'altimétrie n'ont fourni l'altitude */
   ascentM: number | null
+  /** Durée totale de la sortie, pause comprise */
   durationMin: number
+  /** Dont temps de déplacement, sans la pause */
+  movingMin: number
+  /** Dont pause */
+  breakMin: number
   end: Date
 }
 
@@ -105,7 +111,9 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
   const ascentM = elevations === null ? null : ascentMeters(elevations)
   const meanAltitudeM =
     elevations === null ? null : elevations.reduce((sum, z) => sum + z, 0) / elevations.length
-  const durationMin = estimateDurationMinutes(lengthM, ascentM ?? 0, profile)
+  const movingMin = estimateDurationMinutes(lengthM, ascentM ?? 0, profile)
+  // La pause allonge la sortie : le retour avant la nuit et la fenêtre météo la comptent
+  const durationMin = movingMin + BREAK_MINUTES
   const end = new Date(start.getTime() + durationMin * 60_000)
 
   const [daylight, weather, forecast, places, fire, protectedAreas, signalisationsFound] = await Promise.all([
@@ -158,7 +166,7 @@ export async function evaluateRoute(deps: EvaluationDeps, input: EvaluationInput
       : unknownCriterion('shelter', 'Abris et repli', places.error, deps.places.source)
 
   return {
-    summary: { distanceKm: lengthM / 1000, ascentM, durationMin, end },
+    summary: { distanceKm: lengthM / 1000, ascentM, durationMin, movingMin, breakMin: BREAK_MINUTES, end },
     score: computeScore([daylight, weather, forecast, water, shelter, fire, protectedAreas.criterion, signalisations], profile, preferences),
     places: places.found,
     protectedAreas: protectedAreas.areas,

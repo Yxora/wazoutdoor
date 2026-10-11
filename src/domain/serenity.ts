@@ -57,6 +57,10 @@ export interface SerenityScore {
 
 const WATER_REACH_M = 300
 
+/** Pause comptée dans la durée de la sortie (repas, repos). Hypothèse de travail, à valider. */
+export const BREAK_MINUTES = 60
+
+/** Temps de marche (ou de roulage), sans la pause */
 export function estimateDurationMinutes(distanceM: number, ascentM: number, profile: Profile): number {
   const flatHours = distanceM / 1000 / profile.flatSpeedKmh
   const climbHours = ascentM / profile.climbMetersPerHour

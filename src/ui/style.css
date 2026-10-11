@@ -438,8 +438,12 @@ body {
 
 .map-logo {
   display: block;
-  width: 48px;
-  height: 48px;
+  box-sizing: border-box;
+  width: 56px;
+  height: 56px;
+  padding: 6px;
+  object-fit: contain;
+  background: var(--od-surface-raised);
   border-radius: var(--od-radius-pill);
   box-shadow: var(--od-shadow-control);
 }
@@ -1472,4 +1476,19 @@ path.user-dot {
   width: 56px;
   height: 56px;
   border-radius: 50%;
+}
+
+/* Logo et nom en tête des modales et pages (Vérifier, Signaler, Personnaliser) */
+.brand {
+  display: flex;
+  justify-content: center;
+  padding: var(--od-space-2) 0 var(--od-space-3);
+}
+
+.brand__logo {
+  display: block;
+  width: auto;
+  height: 96px;
+  max-width: 100%;
+  object-fit: contain;
 }

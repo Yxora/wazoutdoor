@@ -7,6 +7,7 @@ import {
   type Signalisation,
   type SignalisationType,
 } from '../domain/signalisation'
+import { createBrandLogo } from './brand'
 import { resizeToJpeg } from './photo'
 import { showToast } from './toast'
 import { CAMERA_ICON_PATH, CLOSE_ICON_PATH, LOCATION_ICON_PATH, odIcon, TYPE_ICON_PATH } from './signalisationIcons'
@@ -132,6 +133,8 @@ export function createSignalisationControl(deps: SignalisationControlDeps): Sign
     header.append(node('h2', 'od-sheet__title', 'Signaler un danger'), closeButton)
 
     const body = node('div', 'report-page__body')
+    // Dans la zone qui défile : le logo part avec le contenu au lieu de rester collé en haut
+    body.append(createBrandLogo())
 
     const location = infoRow(LOCATION_ICON_PATH, 'Position actuelle', 'Recherche de votre position…')
     const locationError = node('p', 'od-error')

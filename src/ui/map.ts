@@ -11,7 +11,7 @@ import { openPhotoViewer } from './photoViewer'
 import { CHECK_ICON_PATH, CLOSE_ICON_PATH, odIcon, WARNING_ICON_PATH } from './signalisationIcons'
 import { openCommentsDialog } from './commentsDialog'
 import { showToast } from './toast'
-import logoUrl from './assets/logo.svg'
+import logoUrl from './assets/logo.png'
 
 // Centre des Vosges, cible de départ du projet
 const VOSGES: L.LatLngTuple = [48.0, 7.0]

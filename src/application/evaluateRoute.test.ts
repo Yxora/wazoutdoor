@@ -78,6 +78,9 @@ describe('evaluateRoute', () => {
     expect(result.summary.distanceKm).toBeCloseTo(5.6, 1)
     expect(result.summary.ascentM).toBeGreaterThan(0)
     expect(result.places).toHaveLength(2)
+    // La durée totale inclut une heure de pause, l'arrivée aussi
+    expect(result.summary.breakMin).toBe(60)
+    expect(result.summary.durationMin).toBe(result.summary.movingMin + 60)
   })
 
   it('utilise l’altitude du GPX sans appeler le service', async () => {

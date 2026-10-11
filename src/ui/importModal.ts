@@ -2,6 +2,7 @@ import { listLibraryRoutes } from '../application/listLibraryRoutes'
 import type { RouteActivity, RouteLibrary, RouteSummary } from '../application/ports'
 import { PROFILES, type ProfileId } from '../domain/profile'
 import stravaLogoUrl from './assets/strava.svg'
+import { createBrandLogo } from './brand'
 import { el } from './dom'
 import { BIKE_ICON_PATH, MOUNTAIN_ICON_PATH, odIcon, ROUTE_ICON_PATH, RUN_ICON_PATH } from './signalisationIcons'
 
@@ -339,7 +340,7 @@ export function createImportModal(
   })
 
   dialog.append(
-    el('div', { className: 'modal__body' }, el('h1', { id: 'import-title' }, 'Vérifier une sortie'), form),
+    el('div', { className: 'modal__body' }, createBrandLogo(), el('h1', { id: 'import-title' }, 'Vérifier une sortie'), form),
   )
   document.body.append(dialog)
 

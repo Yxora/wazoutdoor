@@ -155,13 +155,13 @@ function scoreBadge({ score }: Evaluation): HTMLElement {
   )
 }
 
-function statBox(label: string, value: string, note = ''): HTMLElement {
+function statBox(label: string, value: string, notes: string[] = []): HTMLElement {
   return el(
     'div',
     { className: 'stat' },
     el('span', { className: 'stat__label' }, label),
     el('strong', { className: 'stat__value' }, value),
-    note ? el('span', { className: 'stat__note' }, note) : '',
+    ...notes.map((note) => el('span', { className: 'stat__note' }, note)),
   )
 }
 
@@ -234,7 +234,7 @@ function detailContent({ routeName, profile, start, evaluation }: ResultView): C
   const { summary, score } = evaluation
   const ascent = summary.ascentM === null ? 'n.d.' : `+${Math.round(summary.ascentM)} m`
   // Vitesse moyenne réellement retenue (distance / durée estimée), à côté des hypothèses du profil
-  const averageKmh = summary.durationMin > 0 ? (summary.distanceKm / (summary.durationMin / 60)).toFixed(1).replace('.', ',') : null
+  const averageKmh = summary.movingMin > 0 ? (summary.distanceKm / (summary.movingMin / 60)).toFixed(1).replace('.', ',') : null
 
   const vetoed = score.criteria.find((c) => c.id === score.vetoedBy)
   const notes: Note[] = []
@@ -258,7 +258,7 @@ function detailContent({ routeName, profile, start, evaluation }: ResultView): C
     {
       title: 'Comment la durée est estimée',
       status: 'unknown',
-      text: `${profile.flatSpeedKmh} km/h à plat + ${profile.climbMetersPerHour} m de montée par heure (profil ${profile.label.toLowerCase()}). Ce sont des hypothèses, pas des valeurs validées.`,
+      text: `${profile.flatSpeedKmh} km/h à plat + ${profile.climbMetersPerHour} m de montée par heure (profil ${profile.label.toLowerCase()}), plus ${formatDuration(summary.breakMin)} de pause. La vitesse moyenne affichée est calculée sans la pause. Ce sont des hypothèses, pas des valeurs validées.`,
     },
     {
       title: 'À prendre avec du recul',
@@ -274,7 +274,7 @@ function detailContent({ routeName, profile, start, evaluation }: ResultView): C
       { className: 'stats' },
       statBox('Distance', `${summary.distanceKm.toFixed(1).replace('.', ',')} km`),
       statBox('Dénivelé positif', ascent),
-      statBox('Durée estimée', formatDuration(summary.durationMin), averageKmh === null ? '' : `${averageKmh} km/h en moyenne`),
+      statBox('Durée estimée', formatDuration(summary.durationMin), [`dont ${formatDuration(summary.breakMin)} de pause`, ...(averageKmh === null ? [] : [`${averageKmh} km/h en marche`])]),
     ),
     el('p', { className: 'summary' }, `Départ ${timeFormat.format(start)}, arrivée vers ${timeFormat.format(summary.end)}.`),
     scoreBadge(evaluation),
