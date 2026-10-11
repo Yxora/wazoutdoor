@@ -1,3 +1,4 @@
+import avatarUrl from './assets/avatar-julie.svg'
 import { allowedModes, CRITERION_LABEL, effectiveMode, MODE_LABEL, PROFILES, type CriterionId, type CriterionMode, type ProfileId } from '../domain/profile'
 import { SCORED_SIGNALISATION_TYPES, SIGNALISATION_TYPE_LABEL } from '../domain/signalisation'
 import type { User } from '../domain/user'
@@ -169,15 +170,19 @@ export function createUserProfile(initial: User, onChange: (changes: UserChanges
   const section = document.createElement('section')
   section.className = 'user-profile'
   const title = document.createElement('h2')
-  title.textContent = `Profil de ${user.name}`
-  const hint = document.createElement('p')
-  hint.className = 'hint'
-  hint.textContent = 'Glissez chaque critère dans la colonne qui lui correspond. Vos choix sont gardés sur cet appareil.'
+  title.className = 'user-profile__title'
+  // Le texte visible est le prénom ; le lecteur d'écran garde le contexte
+  title.setAttribute('aria-label', `Profil de ${user.name}`)
+  const avatar = document.createElement('img')
+  avatar.className = 'avatar'
+  avatar.src = avatarUrl
+  avatar.alt = ''
+  avatar.width = avatar.height = 56
+  const name = document.createElement('span')
+  name.textContent = user.name
+  title.append(avatar, name)
   const typesTitle = document.createElement('h3')
   typesTitle.textContent = 'Types de signalements'
-  const typesHint = document.createElement('p')
-  typesHint.className = 'hint'
-  typesHint.textContent = 'Critère « Signalements sur le parcours » : choisissez comment traiter chaque type de signalement.'
-  section.append(title, hint, activities, criteriaBoard, typesTitle, typesHint, typesBoard, message)
+  section.append(title, activities, criteriaBoard, typesTitle, typesBoard, message)
   return section
 }

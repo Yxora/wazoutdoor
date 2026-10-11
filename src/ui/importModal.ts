@@ -238,12 +238,19 @@ export function createImportModal(
   const fileInput = el('input', { type: 'file', accept: '.gpx,application/gpx+xml,text/xml' })
   const startInput = el('input', { type: 'datetime-local', required: true, value: toLocalInputValue(defaultStart()) })
   const submit = el('button', { type: 'submit', className: 'primary' }, 'Calculer le score')
+  // Grisé tant qu'aucun tracé n'est importé (GPX ou Strava), et pendant un calcul
+  let busy = false
+  function refreshSubmit() {
+    submit.disabled = busy || gpxText === null
+    submit.title = gpxText === null ? 'Importez d’abord un tracé' : ''
+  }
   const message = el('p', { className: 'error', role: 'alert' })
   message.hidden = true
 
   function setGpx(text: string, label: string) {
     gpxText = text
     gpxLabel.textContent = `Tracé : ${label}`
+    refreshSubmit()
   }
 
   let profileInputs: HTMLInputElement[] = []
@@ -301,6 +308,7 @@ export function createImportModal(
     })
   }
   renderSource()
+  refreshSubmit()
 
   const form = el(
     'form',
@@ -353,9 +361,10 @@ export function createImportModal(
     onClose(listener) {
       dialog.addEventListener('close', listener)
     },
-    setBusy(busy) {
-      submit.disabled = busy
-      submit.textContent = busy ? 'Calcul en cours…' : 'Calculer le score'
+    setBusy(isBusy) {
+      busy = isBusy
+      refreshSubmit()
+      submit.textContent = isBusy ? 'Calcul en cours…' : 'Calculer le score'
     },
     showError(text) {
       modal.setBusy(false)

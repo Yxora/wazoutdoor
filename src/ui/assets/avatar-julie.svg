@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Avatar fictif de Julie">
+  <!-- Avatar fictif pour la démo : illustration simple, pas une photo -->
+  <circle cx="48" cy="48" r="48" fill="#cfe6d9"/>
+  <!-- Épaules et veste -->
+  <path d="M10 92c3-17 17-26 38-26s35 9 38 26a48 48 0 0 1-76 0z" fill="#e8743b"/>
+  <path d="M40 66h16v8c0 4-3.500 7-8 7s-8-3-8-7z" fill="#e9b48f"/>
+  <!-- Cheveux (derrière) -->
+  <path d="M26 46c0-17 9-28 22-28s22 11 22 28c0 12-3 20-6 24-3-9-8-12-16-12s-13 3-16 12c-3-4-6-12-6-24z" fill="#5b3a29"/>
+  <!-- Visage -->
+  <ellipse cx="48" cy="46" rx="15" ry="18" fill="#f1c4a0"/>
+  <!-- Frange -->
+  <path d="M33 42c1-11 8-17 17-17 8 0 13 5 14 12-6-2-12-6-15-10-3 6-9 12-16 15z" fill="#5b3a29"/>
+  <!-- Yeux et sourire -->
+  <circle cx="42" cy="47" r="1.800" fill="#2b2118"/>
+  <circle cx="54" cy="47" r="1.800" fill="#2b2118"/>
+  <path d="M42 55c2.500 3 9.500 3 12 0" fill="none" stroke="#2b2118" stroke-width="2" stroke-linecap="round"/>
+  <!-- Bonnet de rando -->
+  <path d="M30 34c1-9 9-15 18-15s17 6 18 15c-12-4-24-4-36 0z" fill="#2f6b4f"/>
+  <rect x="29" y="32" width="38" height="5" rx="2.500" fill="#f2b84b"/>
+</svg>

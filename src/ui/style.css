@@ -1459,3 +1459,17 @@ path.user-dot {
     transform: scale(0.9);
   }
 }
+
+/* Profil : avatar rond à côté du prénom */
+.user-profile__title {
+  display: flex;
+  align-items: center;
+  gap: var(--od-space-3);
+}
+
+.avatar {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+}
