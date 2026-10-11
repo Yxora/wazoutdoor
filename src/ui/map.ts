@@ -4,11 +4,13 @@ import type { Coordinates } from '../domain/coordinates'
 import { PLACE_CATEGORY_LABEL, type Place, type PlaceCategory } from '../domain/place'
 import type { ProtectedArea } from '../domain/protectedArea'
 import type { Route } from '../domain/route'
-import { SIGNALISATION_TYPE_LABEL, type Signalisation, type SignalisationType } from '../domain/signalisation'
+import { isGonePending, isLive, SIGNALISATION_TYPE_LABEL, signalisationStatus, type Signalisation, type SignalisationType } from '../domain/signalisation'
 import { pictoIcon } from './pictos'
 import { isDisplayablePhoto } from './photo'
 import { openPhotoViewer } from './photoViewer'
-import { odIcon, WARNING_ICON_PATH } from './signalisationIcons'
+import { CHECK_ICON_PATH, CLOSE_ICON_PATH, odIcon, WARNING_ICON_PATH } from './signalisationIcons'
+import { openCommentsDialog } from './commentsDialog'
+import { showToast } from './toast'
 import logoUrl from './assets/logo.svg'
 
 // Centre des Vosges, cible de départ du projet
@@ -60,10 +62,11 @@ export function badge(style: MarkerStyle): HTMLElement {
  * Pastille « danger signalé » : le picto dit quoi (planche des pictos d'imprévus), la gravité reste portée par une forme de statut
  * en coin (triangle « attention »), jamais par la couleur seule. Chart WazeOutdoor.
  */
-function dangerPinBadge(type: SignalisationType, legend = false, redFlag = false): HTMLElement {
+function dangerPinBadge(type: SignalisationType, legend = false, redFlag = false, toConfirm = false, gonePending = false): HTMLElement {
   const element = document.createElement('span')
   const wave = redFlag ? 'od-pin--redflag' : ''
-  element.className = [legend ? 'od-pin od-pin--legend' : 'od-pin', wave].filter(Boolean).join(' ')
+  const faded = gonePending ? 'od-pin--gone' : toConfirm ? 'od-pin--toconfirm' : ''
+  element.className = [legend ? 'od-pin od-pin--legend' : 'od-pin', wave, faded].filter(Boolean).join(' ')
   const status = document.createElement('span')
   status.className = 'od-pin__status'
   status.append(odIcon(WARNING_ICON_PATH, legend ? 10 : 14))
@@ -71,9 +74,9 @@ function dangerPinBadge(type: SignalisationType, legend = false, redFlag = false
   return element
 }
 
-function dangerPinIcon(signalisation: Signalisation, redFlag: boolean): L.DivIcon {
+function dangerPinIcon(signalisation: Signalisation, redFlag: boolean, toConfirm: boolean): L.DivIcon {
   return L.divIcon({
-    html: dangerPinBadge(signalisation.type, false, redFlag),
+    html: dangerPinBadge(signalisation.type, false, redFlag, toConfirm, isGonePending(signalisation)),
     className: 'map-marker',
     iconSize: [40, 40],
     iconAnchor: [20, 20],
@@ -260,14 +263,119 @@ function relativeTimeLabel(date: Date): string {
   return relativeTime.format(Math.round(diffHour / 24), 'day')
 }
 
-function signalisationPopup(signalisation: Signalisation): HTMLElement {
+/** Au-delà, la popup ne montre plus les commentaires : un bouton ouvre la conversation */
+const MAX_INLINE_COMMENTS = 3
+
+const GONE_VOTED_KEY = 'wazoutdoor:gone-voted'
+
+/** Un appareil ne vote « plus là » qu'une fois par signalement (garde-fou léger : pas de compte dans le prototype) */
+function hasVotedGone(id: string): boolean {
+  try {
+    return (JSON.parse(localStorage.getItem(GONE_VOTED_KEY) ?? '[]') as string[]).includes(id)
+  } catch {
+    return false
+  }
+}
+
+function rememberGoneVote(id: string): void {
+  try {
+    const voted = JSON.parse(localStorage.getItem(GONE_VOTED_KEY) ?? '[]') as string[]
+    localStorage.setItem(GONE_VOTED_KEY, JSON.stringify([...voted, id]))
+  } catch {
+    // Sans stockage local, le garde-fou ne joue pas : le vote compte quand même
+  }
+}
+
+/** Actions de cycle de vie, fournies par l'application ; chacune renvoie le signalement à jour */
+export interface SignalisationActions {
+  confirm(signalisation: Signalisation): Promise<Signalisation>
+  reportGone(signalisation: Signalisation): Promise<Signalisation>
+  comment(signalisation: Signalisation, text: string): Promise<Signalisation>
+}
+
+function lifecycleButtons(
+  signalisation: Signalisation,
+  actions: SignalisationActions,
+  onChanged: (updated: Signalisation) => void,
+): HTMLElement {
+  const row = document.createElement('div')
+  row.className = 'od-popup__actions'
+  const message = document.createElement('p')
+  message.className = 'od-popup__message'
+  message.setAttribute('role', 'status')
+  const make = (label: string, fullName: string, tone: 'ok' | 'closed', iconPath: string, run: () => Promise<Signalisation>, done: string) => {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = `od-button od-popup__vote od-popup__vote--${tone}`
+    button.setAttribute('aria-label', fullName)
+    const glyph = odIcon(iconPath, 18)
+    glyph.setAttribute('class', 'od-popup__vote-icon')
+    const text = document.createElement('span')
+    text.textContent = label
+    button.append(glyph, text)
+    button.addEventListener('click', async () => {
+      row.querySelectorAll('button').forEach((b) => (b.disabled = true))
+      try {
+        const updated = await run()
+        // La carte se redessine (la fenêtre se ferme) : le retour passe par le toast
+        showToast(done)
+        onChanged(updated)
+      } catch (error) {
+        message.textContent = `Impossible : ${error instanceof Error ? error.message : 'erreur réseau'}`
+        row.querySelectorAll('button').forEach((b) => (b.disabled = false))
+      }
+    })
+    return button
+  }
+  const still = make('Oui', 'Toujours là', 'ok', CHECK_ICON_PATH, () => actions.confirm(signalisation), 'Merci, signalement confirmé.')
+  const gone = make(
+    'Non',
+    'Plus là',
+    'closed',
+    CLOSE_ICON_PATH,
+    async () => {
+      const updated = await actions.reportGone(signalisation)
+      rememberGoneVote(signalisation.id)
+      return updated
+    },
+    'Merci. Il disparaît quand deux personnes disent qu’il n’y est plus.',
+  )
+  const votes = document.createElement('div')
+  votes.className = 'od-popup__votes'
+  const question = document.createElement('p')
+  question.className = 'od-popup__question'
+  question.textContent = 'Toujours là ?'
+  votes.append(still, gone)
+  row.append(question, votes)
+  if (hasVotedGone(signalisation.id)) {
+    gone.disabled = true
+    gone.setAttribute('aria-label', 'Plus là (vote enregistré)')
+    gone.title = 'Vote enregistré'
+  }
+  const total = signalisation.comments?.length ?? 0
+  const talk = document.createElement('button')
+  talk.type = 'button'
+  talk.className = 'od-button od-button--secondary od-popup__action od-popup__talk'
+  talk.textContent = total > MAX_INLINE_COMMENTS ? `Voir la conversation (${total})` : 'Ajouter un commentaire'
+  talk.addEventListener('click', () => openCommentsDialog(signalisation, actions.comment, onChanged))
+  row.append(talk, message)
+  return row
+}
+
+function signalisationPopup(
+  signalisation: Signalisation,
+  toConfirm: boolean,
+  actions?: SignalisationActions,
+  onChanged: (updated: Signalisation) => void = () => {},
+): HTMLElement {
   const box = document.createElement('div')
   box.className = 'od-popup'
   const title = document.createElement('strong')
   title.textContent = SIGNALISATION_TYPE_LABEL[signalisation.type]
   box.append(title)
   if (signalisation.description) box.append(document.createElement('br'), signalisation.description)
-  box.append(document.createElement('br'), `Signalé ${relativeTimeLabel(signalisation.createdAt)}`)
+  box.append(document.createElement('br'), `Signalé ${relativeTimeLabel(signalisation.createdAt)}${toConfirm ? ' · à confirmer' : ''}`)
+  if (isGonePending(signalisation)) box.append(document.createElement('br'), 'Une personne dit qu’il n’y est plus : à confirmer.')
   const photoUrl = signalisation.photoUrl
   if (isDisplayablePhoto(photoUrl)) {
     const thumb = document.createElement('button')
@@ -282,12 +390,25 @@ function signalisationPopup(signalisation: Signalisation): HTMLElement {
     thumb.addEventListener('click', () => openPhotoViewer(photoUrl, `Photo : ${SIGNALISATION_TYPE_LABEL[signalisation.type]}`))
     box.append(thumb)
   }
+  if (signalisation.comments?.length && signalisation.comments.length <= MAX_INLINE_COMMENTS) {
+    const list = document.createElement('ul')
+    list.className = 'od-popup__comments'
+    for (const comment of signalisation.comments) {
+      const item = document.createElement('li')
+      item.textContent = comment
+      list.append(item)
+    }
+    box.append(list)
+  }
+  if (actions) box.append(lifecycleButtons(signalisation, actions, onChanged))
   return box
 }
 
 export interface SignalisationLayer {
   show(signalisations: Signalisation[]): void
   add(signalisation: Signalisation): void
+  /** Remplace un signalement modifié (même identifiant) */
+  replace(signalisation: Signalisation): void
   /** Centre la carte sur le signalement et ouvre sa fenêtre */
   focus(signalisation: Signalisation): void
   /** Types réglés sur « Red flag » par l'utilisateur·rice : leurs points émettent une onde rouge */
@@ -330,18 +451,19 @@ function spreadOverlapping(map: L.Map, signalisations: Signalisation[]): L.LatLn
   return placed
 }
 
-export function createSignalisationLayer(map: L.Map): SignalisationLayer {
+export function createSignalisationLayer(map: L.Map, actions?: SignalisationActions): SignalisationLayer {
   const layer = L.layerGroup().addTo(map)
   let signalisations: Signalisation[] = []
   let redFlags: ReadonlySet<SignalisationType> = new Set()
 
   const markerFor = (signalisation: Signalisation, position: L.LatLng) => {
     const label = SIGNALISATION_TYPE_LABEL[signalisation.type]
+    const toConfirm = signalisationStatus(signalisation, new Date()) === 'to_confirm'
     return L.marker(position, {
-      icon: dangerPinIcon(signalisation, redFlags.has(signalisation.type)),
+      icon: dangerPinIcon(signalisation, redFlags.has(signalisation.type), toConfirm),
       title: label,
       alt: label,
-    }).bindPopup(signalisationPopup(signalisation))
+    }).bindPopup(signalisationPopup(signalisation, toConfirm, actions, (updated) => api.replace(updated)))
   }
 
   const markers = new Map<string, L.Marker>()
@@ -349,8 +471,10 @@ export function createSignalisationLayer(map: L.Map): SignalisationLayer {
   const render = () => {
     layer.clearLayers()
     markers.clear()
-    const positions = spreadOverlapping(map, signalisations)
-    signalisations.forEach((signalisation, index) => {
+    // Un signalement résolu ou expiré en cours de session disparaît de la carte
+    const live = signalisations.filter((s) => isLive(s, new Date()))
+    const positions = spreadOverlapping(map, live)
+    live.forEach((signalisation, index) => {
       const marker = markerFor(signalisation, positions[index]).addTo(layer)
       markers.set(signalisation.id, marker)
     })
@@ -358,13 +482,17 @@ export function createSignalisationLayer(map: L.Map): SignalisationLayer {
   // À chaque zoom, des pastilles se rapprochent ou s'éloignent
   map.on('zoomend', render)
 
-  return {
+  const api: SignalisationLayer = {
     show(next) {
       signalisations = next
       render()
     },
     add(signalisation) {
       signalisations = [...signalisations, signalisation]
+      render()
+    },
+    replace(signalisation) {
+      signalisations = signalisations.map((s) => (s.id === signalisation.id ? signalisation : s))
       render()
     },
     focus(signalisation) {
@@ -377,4 +505,5 @@ export function createSignalisationLayer(map: L.Map): SignalisationLayer {
       render()
     },
   }
+  return api
 }

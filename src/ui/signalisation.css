@@ -412,6 +412,26 @@
   }
 }
 
+/* Mobile : le toast occupe toute la largeur de l'écran, au-dessus du menu */
+@media (max-width: 600px) {
+  .od-toast {
+    left: 0;
+    right: 0;
+    transform: none;
+    max-width: none;
+    border-radius: 0;
+    text-align: center;
+    animation-name: od-toast-in-mobile;
+  }
+}
+
+@keyframes od-toast-in-mobile {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .od-toast {
     animation: none;
@@ -462,4 +482,173 @@
 /* Les règles display ci-dessus ne doivent pas écraser l'attribut hidden */
 .report-page [hidden] {
   display: none;
+}
+
+/* Question « modifier le précédent ? » posée par-dessus le formulaire de signalement */
+.report-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: var(--od-space-4);
+  background: rgb(0 0 0 / 0.5);
+}
+
+.report-confirm__box {
+  display: grid;
+  gap: var(--od-space-2);
+  width: min(100%, 420px);
+  padding: var(--od-space-4);
+  border-radius: 12px;
+  background: var(--od-surface-raised);
+}
+
+.report-confirm__text {
+  margin: 0 0 var(--od-space-2);
+}
+
+/* Signalement à confirmer (passé la moitié de sa durée de validité) : pastille estompée, trait pointillé */
+.od-pin--toconfirm {
+  opacity: 0.65;
+  outline: 2px dashed var(--od-ink);
+  outline-offset: 1px;
+}
+
+.od-popup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--od-space-2);
+  margin-top: var(--od-space-2);
+}
+
+.od-popup__action:disabled {
+  opacity: 0.6;
+}
+
+.od-popup__message {
+  flex-basis: 100%;
+  margin: 0;
+  font: var(--od-caption);
+}
+
+.od-popup__comments {
+  margin: var(--od-space-2) 0 0;
+  padding-left: var(--od-space-4);
+}
+
+/* Conversation d'un signalement : fenêtre par-dessus la carte */
+.comments-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: var(--od-space-4);
+  background: rgb(0 0 0 / 0.5);
+}
+
+.comments-dialog__box {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: var(--od-space-3);
+  width: min(100%, 460px);
+  max-height: 85dvh;
+  padding: var(--od-space-4);
+  border-radius: 12px;
+  background: var(--od-surface-raised);
+  color: var(--od-ink);
+}
+
+.comments-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--od-space-2);
+}
+
+.comments-dialog__list {
+  display: grid;
+  align-content: start;
+  gap: var(--od-space-2);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.comments-dialog__item {
+  padding: var(--od-space-2) var(--od-space-3);
+  border-radius: 8px;
+  background: var(--od-surface);
+  overflow-wrap: anywhere;
+}
+
+.comments-dialog__empty {
+  margin: 0;
+  font: var(--od-caption);
+}
+
+.comments-dialog__form {
+  display: grid;
+  gap: var(--od-space-2);
+}
+
+/* Une personne a dit « plus là », une seconde doit confirmer : pastille grisée (et non plus seulement estompée) */
+.od-pin--gone {
+  filter: grayscale(1);
+  opacity: 0.55;
+  outline: 2px dashed var(--od-ink);
+  outline-offset: 1px;
+}
+
+/* Toujours là (coche verte) et Plus là (croix rouge) : la forme dit l'action, la couleur la renforce */
+.od-popup__action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--od-space-1, 4px);
+}
+
+
+.od-popup__question {
+  flex-basis: 100%;
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Oui / Non côte à côte, même sur mobile : fond vert ou rouge, texte blanc, la forme (coche, croix) double la couleur */
+.od-popup__votes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--od-space-2);
+  flex-basis: 100%;
+}
+
+.od-popup__vote {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--od-space-1, 4px);
+  color: #fff;
+}
+
+.od-popup__vote--ok {
+  background: var(--od-status-ok);
+}
+
+.od-popup__vote--closed {
+  background: var(--od-status-closed);
+}
+
+.od-popup__vote:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.od-popup__vote:disabled {
+  opacity: 0.55;
+}
+
+.od-popup__talk {
+  flex-basis: 100%;
+  justify-content: center;
 }

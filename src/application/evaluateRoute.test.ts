@@ -56,7 +56,7 @@ function deps(overrides: Partial<EvaluationDeps> = {}): EvaluationDeps {
     places: { source: 'refuges', around: async () => [water, shelter] },
     fireRisk: { source: 'firms', around: async () => [] },
     protectedAreas: { source: 'ign', around: async () => [] },
-    signalisations: { save: async () => {}, list: async () => [] },
+    signalisations: { save: async () => {}, confirm: async () => Promise.reject(new Error('inutilisé')), reportGone: async () => Promise.reject(new Error('inutilisé')), addComment: async () => Promise.reject(new Error('inutilisé')), list: async () => [] },
     ...overrides,
   }
 }
@@ -290,7 +290,7 @@ describe('evaluateRoute', () => {
   it('tient compte des signalements proches du tracé', async () => {
     const withTree = deps({
       signalisations: {
-        save: async () => {},
+        save: async () => {}, confirm: async () => Promise.reject(new Error('inutilisé')), reportGone: async () => Promise.reject(new Error('inutilisé')), addComment: async () => Promise.reject(new Error('inutilisé')),
         list: async () => [
           { id: 'x', type: 'arbre', description: '', position: { lat: 48.025, lng: 7 }, createdAt: new Date() },
         ],
@@ -303,7 +303,7 @@ describe('evaluateRoute', () => {
   it('marque les signalements indisponibles quand le stockage échoue', async () => {
     const broken = deps({
       signalisations: {
-        save: async () => {},
+        save: async () => {}, confirm: async () => Promise.reject(new Error('inutilisé')), reportGone: async () => Promise.reject(new Error('inutilisé')), addComment: async () => Promise.reject(new Error('inutilisé')),
         list: async () => {
           throw new Error('hors ligne')
         },
@@ -316,7 +316,7 @@ describe('evaluateRoute', () => {
   it('recalcule le critère des signalements avec d’autres préférences par type', async () => {
     const withHunt = deps({
       signalisations: {
-        save: async () => {},
+        save: async () => {}, confirm: async () => Promise.reject(new Error('inutilisé')), reportGone: async () => Promise.reject(new Error('inutilisé')), addComment: async () => Promise.reject(new Error('inutilisé')),
         list: async () => [
           { id: 'c', type: 'chasse', description: '', position: { lat: 48.025, lng: 7 }, createdAt: new Date() },
         ],

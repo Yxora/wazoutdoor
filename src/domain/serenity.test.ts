@@ -241,6 +241,30 @@ describe('scoreSignalisations', () => {
     expect(scoreSignalisations(longLine, [sig('chasse', 48.1, 7.2)], 's', modes).redFlag).toBeUndefined()
   })
 
+  it('ne compte plus un signalement résolu ou expiré', () => {
+    const resolved = { ...sig('arbre', 48.1), goneVotes: 2 }
+    const expired = { ...sig('chasse', 48.1), createdAt: new Date('2026-01-01T00:00:00Z') }
+    expect(scoreSignalisations(longLine, [resolved, expired], 's').status).toBe('ok')
+  })
+
+  it('pèse moins un signalement à confirmer, et le dit', () => {
+    const now = new Date('2026-10-20T00:00:00Z')
+    const fresh = { ...sig('arbre', 48.1), createdAt: new Date('2026-10-19T00:00:00Z') }
+    const aging = { ...sig('arbre', 48.1), createdAt: new Date('2026-10-02T00:00:00Z') }
+    const freshResult = scoreSignalisations(longLine, [fresh], 's', undefined, now)
+    const agingResult = scoreSignalisations(longLine, [aging], 's', undefined, now)
+    expect(freshResult.score).toBe(60)
+    expect(agingResult.score).toBeGreaterThan(60)
+    expect(agingResult.facets?.[0].detail).toContain('à confirmer')
+  })
+
+  it('un red flag reste éliminatoire même à confirmer', () => {
+    const now = new Date('2026-10-11T07:00:00Z')
+    const hunt = { ...sig('chasse', 48.1), createdAt: new Date('2026-10-11T00:00:00Z') }
+    const modes = { ...DEFAULT_SIGNALISATION_PREFERENCES, chasse: 'veto' as const }
+    expect(scoreSignalisations(longLine, [hunt], 's', modes, now).redFlag).toBe('Chasse en cours')
+  })
+
   it('alerte à partir de trois signalements', () => {
     const many = [sig('arbre', 48.05), sig('boue', 48.1), sig('neige', 48.15)]
     expect(scoreSignalisations(longLine, many, 's').status).toBe('alert')

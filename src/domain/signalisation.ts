@@ -1,5 +1,6 @@
 import type { Coordinates } from './coordinates'
 import type { CriterionMode } from './profile'
+import { distanceMeters } from './route'
 
 /** Danger ponctuel pouvant gêner une sortie outdoor (rando, trail, VTT) */
 export type SignalisationType =
@@ -23,6 +24,10 @@ export interface Signalisation {
   createdAt: Date
   /** Photo jointe pour qualifier le signalement (adresse publique) */
   photoUrl?: string
+  /** Nombre de personnes ayant indiqué « plus là » depuis la dernière confirmation (0 si absent) */
+  goneVotes?: number
+  /** Commentaires d'autres utilisateur·rices, du plus ancien au plus récent */
+  comments?: string[]
 }
 
 export const SIGNALISATION_TYPE_LABEL: Record<SignalisationType, string> = {
@@ -69,8 +74,36 @@ export function reachMeters(type: SignalisationType): number {
 
 const DESCRIPTION_MAX_LENGTH = 280
 
-/** Durée au-delà de laquelle un signalement n'est plus affiché, faute de confirmation */
-const VALIDITY_DAYS = 30
+const HOUR_MS = 60 * 60 * 1000
+const DAY_MS = 24 * HOUR_MS
+
+/**
+ * Durée au-delà de laquelle un signalement n'est plus affiché, faute de confirmation. Dépend de la vitesse à laquelle le
+ * danger disparaît : une battue dure quelques heures, un arbre tombé reste des semaines. Hypothèses de travail, à valider.
+ */
+const VALIDITY_MS_BY_TYPE: Record<SignalisationType, number> = {
+  chasse: 12 * HOUR_MS,
+  brouillard: 6 * HOUR_MS,
+  boue: 3 * DAY_MS,
+  neige: 3 * DAY_MS,
+  eau: 3 * DAY_MS,
+  troupeau: 14 * DAY_MS,
+  autre: 14 * DAY_MS,
+  arbre: 21 * DAY_MS,
+  eboulis: 21 * DAY_MS,
+  dechets: 21 * DAY_MS,
+  balisage: 90 * DAY_MS,
+}
+
+export function validityMs(type: SignalisationType): number {
+  return VALIDITY_MS_BY_TYPE[type]
+}
+
+/** Nombre de « plus là » (de personnes différentes) qui ferment un signalement */
+export const GONE_VOTES_TO_RESOLVE = 2
+
+/** Moment de la vie du signalement, de sa création à sa disparition */
+export type SignalisationStatus = 'active' | 'to_confirm' | 'expired' | 'resolved'
 
 export interface NewSignalisation {
   type: SignalisationType
@@ -91,7 +124,95 @@ export function createSignalisation(input: NewSignalisation, now = new Date()): 
   }
 }
 
+function ageMs(signalisation: Signalisation, now: Date): number {
+  return now.getTime() - signalisation.createdAt.getTime()
+}
+
 export function isExpired(signalisation: Signalisation, now: Date): boolean {
-  const ageMs = now.getTime() - signalisation.createdAt.getTime()
-  return ageMs > VALIDITY_DAYS * 24 * 60 * 60 * 1000
+  return ageMs(signalisation, now) > validityMs(signalisation.type)
+}
+
+export function isResolved(signalisation: Signalisation): boolean {
+  return (signalisation.goneVotes ?? 0) >= GONE_VOTES_TO_RESOLVE
+}
+
+/** Quelqu'un a dit « plus là » mais pas encore assez de personnes pour le résoudre : à vérifier */
+export function isGonePending(signalisation: Signalisation): boolean {
+  return !isResolved(signalisation) && (signalisation.goneVotes ?? 0) > 0
+}
+
+/**
+ * Résolu (assez de « plus là ») ou expiré : plus affiché ni compté. « À confirmer » : passé la moitié de sa durée de
+ * validité, encore affiché et compté, mais avec moins de poids.
+ */
+export function signalisationStatus(signalisation: Signalisation, now: Date): SignalisationStatus {
+  if (isResolved(signalisation)) return 'resolved'
+  if (isExpired(signalisation, now)) return 'expired'
+  return ageMs(signalisation, now) > validityMs(signalisation.type) / 2 ? 'to_confirm' : 'active'
+}
+
+/** Affiché et compté dans le score */
+export function isLive(signalisation: Signalisation, now: Date): boolean {
+  const status = signalisationStatus(signalisation, now)
+  return status === 'active' || status === 'to_confirm'
+}
+
+/** Poids d'un signalement dans le score : 1 jusqu'à la moitié de sa durée de validité, puis décroît jusqu'à 0,4 à l'expiration */
+export function freshness(signalisation: Signalisation, now: Date): number {
+  const ratio = ageMs(signalisation, now) / validityMs(signalisation.type)
+  if (ratio <= 0.5) return 1
+  return Math.max(0.4, 1 - 1.2 * (ratio - 0.5))
+}
+
+/** « Toujours là » : la date repart de maintenant et les « plus là » sont remis à zéro */
+export function confirmSignalisation(signalisation: Signalisation, now = new Date()): Signalisation {
+  return { ...signalisation, createdAt: now, goneVotes: 0 }
+}
+
+/** « Plus là » : une voix de plus ; à deux voix le signalement est résolu */
+export function reportGone(signalisation: Signalisation): Signalisation {
+  return { ...signalisation, goneVotes: (signalisation.goneVotes ?? 0) + 1 }
+}
+
+export interface NearbySignalisations {
+  /** Signalement actif de même type le plus proche, dans sa zone d'effet */
+  sameType?: { signalisation: Signalisation; distanceM: number }
+  /** Signalements actifs d'un autre type, assez proches pour se recouvrir, du plus proche au plus loin */
+  otherTypes: { signalisation: Signalisation; distanceM: number }[]
+}
+
+/**
+ * Signalements déjà présents autour d'une position. « Proche » = à moins de la zone d'effet du type (voir `reachMeters`) ;
+ * entre deux types différents, on retient la plus petite des deux zones, pour qu'une battue de chasse (3 km) ne bloque
+ * pas le signalement d'un arbre tombé 2 km plus loin. Hypothèse de travail, à valider.
+ */
+export function findNearbySignalisations(
+  position: Coordinates,
+  type: SignalisationType,
+  existing: Signalisation[],
+  now = new Date(),
+): NearbySignalisations {
+  const result: NearbySignalisations = { otherTypes: [] }
+  const withDistance = existing
+    .filter((s) => isLive(s, now))
+    .map((signalisation) => ({ signalisation, distanceM: distanceMeters(position, signalisation.position) }))
+    .sort((a, b) => a.distanceM - b.distanceM)
+  for (const item of withDistance) {
+    const reach = Math.min(reachMeters(type), reachMeters(item.signalisation.type))
+    if (item.distanceM > reach) continue
+    if (item.signalisation.type === type) result.sameType ??= item
+    else result.otherTypes.push(item)
+  }
+  return result
+}
+
+export const MAX_COMMENT_LENGTH = 140
+export const MAX_COMMENTS = 10
+
+/** Commentaire ajouté par une autre personne (« passage contourné par la gauche »). Vide ou au-delà de la limite : inchangé. */
+export function addComment(signalisation: Signalisation, text: string): Signalisation {
+  const comment = text.trim().slice(0, MAX_COMMENT_LENGTH)
+  const comments = signalisation.comments ?? []
+  if (!comment || comments.length >= MAX_COMMENTS) return signalisation
+  return { ...signalisation, comments: [...comments, comment] }
 }

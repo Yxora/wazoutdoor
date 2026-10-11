@@ -1,0 +1,4 @@
+-- Abandonnée : la modification publique d'un signalement n'est plus nécessaire.
+-- Le cycle de vie passe par des fonctions SQL (voir 20261011150000_signalisation_lifecycle.sql).
+-- Fichier à supprimer s'il n'a jamais été appliqué ; s'il l'a été, retirer la policy
+-- avec : drop policy if exists "signalisations_update_public" on public.signalisations;

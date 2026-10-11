@@ -80,6 +80,12 @@ export interface PhotoStore {
 
 export interface SignalisationStore {
   save(signalisation: Signalisation): Promise<void>
+  /** « Toujours là » : la date repart de maintenant, les « plus là » sont remis à zéro */
+  confirm(id: string): Promise<Signalisation>
+  /** « Plus là » : une voix de plus ; à deux voix le signalement est résolu */
+  reportGone(id: string): Promise<Signalisation>
+  /** Ajoute un commentaire (vide ou limite atteinte : signalement inchangé) */
+  addComment(id: string, text: string): Promise<Signalisation>
   list(): Promise<Signalisation[]>
 }
 

@@ -8,6 +8,9 @@ import {
   reachMeters,
   SCORED_SIGNALISATION_TYPES,
   SIGNALISATION_TYPE_LABEL,
+  freshness,
+  isLive,
+  signalisationStatus,
   type Signalisation,
   type SignalisationPreferences,
 } from './signalisation'
@@ -244,6 +247,7 @@ export function scoreSignalisations(
 ): CriterionResult {
   const base = { id: 'signalisations' as const, label: 'Signalements sur le parcours', source }
   const onRoute = signalisations
+    .filter((signalisation) => isLive(signalisation, now))
     .filter((signalisation) => SCORED_SIGNALISATION_TYPES.includes(signalisation.type) && typeModes[signalisation.type] !== 'ignore')
     .map((signalisation) => ({
       signalisation,
@@ -263,7 +267,8 @@ export function scoreSignalisations(
 
   const isRedFlag = (type: Signalisation['type']) => typeModes[type] === 'veto'
   const facets: Facet[] = onRoute.map(({ signalisation, distanceM }) => {
-    const where = `à ${formatDistance(distanceM)} du tracé (zone d’effet : ${formatDistance(reachMeters(signalisation.type))}), ${ageLabel(signalisation.createdAt, now)}`
+    const toConfirm = signalisationStatus(signalisation, now) === 'to_confirm' ? ', à confirmer' : ''
+    const where = `à ${formatDistance(distanceM)} du tracé (zone d’effet : ${formatDistance(reachMeters(signalisation.type))}), ${ageLabel(signalisation.createdAt, now)}${toConfirm}`
     return {
       label: SIGNALISATION_TYPE_LABEL[signalisation.type] + (isRedFlag(signalisation.type) ? ' (red flag)' : ''),
       status: isRedFlag(signalisation.type) ? 'alert' : 'warning',
@@ -272,11 +277,13 @@ export function scoreSignalisations(
   })
   const detail = `${onRoute.length} signalement(s) dans la zone d’effet du tracé. Détail ci-dessous.`
   const redFlag = onRoute.find((hit) => isRedFlag(hit.signalisation.type))
-  const alert = redFlag !== undefined || onRoute.length >= 3
+  // Un signalement qui vieillit pèse moins (voir `freshness`) ; un type en red flag reste éliminatoire tant qu'il est affiché
+  const weights = onRoute.map(({ signalisation }) => freshness(signalisation, now))
+  const alert = redFlag !== undefined || weights.reduce((sum, w) => sum + w, 0) >= 3
   return {
     ...base,
     status: alert ? 'alert' : 'warning',
-    score: alert ? 20 : 60,
+    score: alert ? 20 : 100 - Math.round(40 * Math.max(...weights)),
     detail,
     facets,
     redFlag: redFlag && SIGNALISATION_TYPE_LABEL[redFlag.signalisation.type],

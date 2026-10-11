@@ -1,6 +1,12 @@
 import type { LocationResult } from '../application/ports'
 import type { Coordinates } from '../domain/coordinates'
-import { SIGNALISATION_TYPE_LABEL, SIGNALISATION_TYPES, type SignalisationType } from '../domain/signalisation'
+import {
+  SIGNALISATION_TYPE_LABEL,
+  SIGNALISATION_TYPES,
+  type NearbySignalisations,
+  type Signalisation,
+  type SignalisationType,
+} from '../domain/signalisation'
 import { resizeToJpeg } from './photo'
 import { showToast } from './toast'
 import { CAMERA_ICON_PATH, CLOSE_ICON_PATH, LOCATION_ICON_PATH, odIcon, TYPE_ICON_PATH } from './signalisationIcons'
@@ -11,10 +17,16 @@ export interface SignalisationInput {
   description: string
   /** Photo prise pour qualifier le signalement (data URL JPEG) */
   photo?: string
+  /** Signalement proche de même type, à actualiser (position, détails, photo) au lieu d'en créer un nouveau */
+  amend?: Signalisation
 }
 
 export interface SignalisationControlDeps {
+  /** Signalements déjà présents autour de la position, pour éviter les doublons */
+  findNearby(position: Coordinates, type: SignalisationType): Promise<NearbySignalisations>
   getCurrentPosition(): Promise<LocationResult>
+  /** Un signalement de même type existe déjà à proximité : l'application ouvre le sien sur la carte */
+  onExisting(existing: Signalisation, distanceM: number): void
   /** Enregistre le signalement et bascule sur la carte, centrée dessus */
   onSubmit(input: SignalisationInput): Promise<void> | void
 }
@@ -49,13 +61,40 @@ function infoRow(iconPath: string, title: string, detail: string): { row: HTMLEl
   return { row, setDetail: (value) => (detailEl.textContent = value) }
 }
 
+function metersLabel(meters: number): string {
+  return `${Math.max(1, Math.round(meters))} m`
+}
+
+/** Question à deux boutons, posée par-dessus le formulaire. Résout `true` si l'on confirme. */
+function ask(host: HTMLElement, message: string, confirmLabel: string, cancelLabel: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = node('div', 'report-confirm')
+    const box = node('div', 'report-confirm__box')
+    box.setAttribute('role', 'alertdialog')
+    box.setAttribute('aria-label', message)
+    const confirm = node('button', 'od-button od-button--primary', confirmLabel)
+    const cancel = node('button', 'od-button od-button--secondary', cancelLabel)
+    confirm.type = cancel.type = 'button'
+    const answer = (value: boolean) => {
+      overlay.remove()
+      resolve(value)
+    }
+    confirm.addEventListener('click', () => answer(true))
+    cancel.addEventListener('click', () => answer(false))
+    box.append(node('p', 'report-confirm__text', message), confirm, cancel)
+    overlay.append(box)
+    host.append(overlay)
+    confirm.focus()
+  })
+}
+
 /**
  * Signalement d'un danger sur la position GPS actuelle (chart WazeOutdoor), dans une page à part entière :
  * le formulaire défile, le bouton d'envoi reste toujours visible en bas.
  * Déclenché par l'onglet « Signaler » du menu du bas.
  */
 export function createSignalisationControl(deps: SignalisationControlDeps): SignalisationControl {
-  const { getCurrentPosition, onSubmit } = deps
+  const { getCurrentPosition, findNearby, onExisting, onSubmit } = deps
   let page: HTMLElement | null = null
 
   function close() {
@@ -192,6 +231,29 @@ export function createSignalisationControl(deps: SignalisationControlDeps): Sign
       submit.disabled = true
       errorMessage.hidden = true
       try {
+        // Évite les doublons : si la vérification échoue, on n'empêche pas d'envoyer
+        const nearby = await findNearby(position, selectedType).catch((): NearbySignalisations => ({ otherTypes: [] }))
+        if (nearby.sameType) {
+          // Pas de doublon : on ferme le formulaire et on ouvre le signalement existant (toujours là / plus là / commentaire)
+          const { signalisation, distanceM } = nearby.sameType
+          close()
+          onExisting(signalisation, distanceM)
+          return
+        }
+        if (nearby.otherTypes.length) {
+          const labels = [...new Set(nearby.otherTypes.map(({ signalisation }) => `« ${SIGNALISATION_TYPE_LABEL[signalisation.type]} »`))]
+          const closest = nearby.otherTypes[0].distanceM
+          const proceed = await ask(
+            root,
+            `Un signalement d’un autre type (${labels.join(', ')}) existe déjà à moins de ${metersLabel(closest)}. Souhaitez-vous tout de même ajouter le vôtre ?`,
+            'Ajouter le mien',
+            'Annuler',
+          )
+          if (!proceed) {
+            submit.disabled = false
+            return
+          }
+        }
         await onSubmit({ position, type: selectedType, description: description.value, photo })
         close()
         showToast('Signalement bien envoyé')

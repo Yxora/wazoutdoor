@@ -1,5 +1,11 @@
 import { checkDatabase } from './application/checkDatabase'
 import { applyPreferences, evaluateRoute, type EvaluationDeps } from './application/evaluateRoute'
+import {
+  commentSignalisation,
+  checkNearbySignalisations,
+  confirmSignalisationStillThere,
+  reportSignalisationGone,
+} from './application/maintainSignalisation'
 import { listActiveSignalisations } from './application/listSignalisations'
 import { locateUser } from './application/locateUser'
 import type { PhotoStore, SignalisationStore } from './application/ports'
@@ -30,6 +36,7 @@ import { createImportModal } from './ui/importModal'
 import { playScoreEffect } from './ui/scoreEffect'
 import { createScoreView, type ResultView } from './ui/scoreView'
 import { createSignalisationControl } from './ui/signalisationControl'
+import { showToast } from './ui/toast'
 import { createUserProfile } from './ui/userProfile'
 import './ui/tokens.css'
 import './ui/style.css'
@@ -166,7 +173,11 @@ async function main() {
     else if (!location.ok) console.info(`Position non disponible (${location.reason}), carte centrée sur les Vosges`)
   })
 
-  const signalisationLayer = createSignalisationLayer(map)
+  const signalisationLayer = createSignalisationLayer(map, {
+    confirm: (s) => confirmSignalisationStillThere(signalisationStore, s.id),
+    reportGone: (s) => reportSignalisationGone(signalisationStore, s.id),
+    comment: (s, text) => commentSignalisation(signalisationStore, s.id, text),
+  })
   signalisationLayer.setRedFlags(redFlagTypes(userStore.get().signalisationPreferences))
   listActiveSignalisations(signalisationStore)
     .then((signalisations) => signalisationLayer.show(signalisations))
@@ -174,6 +185,12 @@ async function main() {
 
   const signalisationControl = createSignalisationControl({
     getCurrentPosition: () => locateUser(geolocator),
+    findNearby: (position, type) => checkNearbySignalisations(signalisationStore, position, type),
+    onExisting: (existing, distanceM) => {
+      nav.showMap()
+      signalisationLayer.focus(existing)
+      showToast(`Ce signalement existe déjà à ${Math.max(1, Math.round(distanceM))} m : confirmez-le ou ajoutez un commentaire.`)
+    },
     onSubmit: async ({ position, type, description, photo }) => {
       const signalisation = await reportSignalisation(signalisationStore, { position, type, description, photo }, photoStore)
       signalisationLayer.add(signalisation)

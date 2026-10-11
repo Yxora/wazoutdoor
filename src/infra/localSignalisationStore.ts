@@ -1,5 +1,5 @@
 import type { SignalisationStore } from '../application/ports'
-import type { Signalisation } from '../domain/signalisation'
+import { addComment, confirmSignalisation, reportGone, type Signalisation } from '../domain/signalisation'
 
 const STORAGE_KEY = 'wazoutdoor:signalisations'
 
@@ -11,6 +11,27 @@ export class LocalSignalisationStore implements SignalisationStore {
     const all = await this.list()
     all.push(signalisation)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
+  }
+
+  async confirm(id: string): Promise<Signalisation> {
+    return this.change(id, (s) => confirmSignalisation(s))
+  }
+
+  async reportGone(id: string): Promise<Signalisation> {
+    return this.change(id, reportGone)
+  }
+
+  async addComment(id: string, text: string): Promise<Signalisation> {
+    return this.change(id, (s) => addComment(s, text))
+  }
+
+  private async change(id: string, apply: (s: Signalisation) => Signalisation): Promise<Signalisation> {
+    const all = await this.list()
+    const found = all.find((s) => s.id === id)
+    if (!found) throw new Error('Signalement introuvable')
+    const changed = apply(found)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(all.map((s) => (s.id === id ? changed : s))))
+    return changed
   }
 
   async list(): Promise<Signalisation[]> {

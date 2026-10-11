@@ -9,6 +9,8 @@ interface SignalisationRow {
   lng: number
   created_at: string
   photo_url?: string | null
+  gone_votes?: number | null
+  comments?: string[] | null
 }
 
 function toRow(signalisation: Signalisation): SignalisationRow {
@@ -32,6 +34,8 @@ function fromRow(row: SignalisationRow): Signalisation {
     position: { lat: row.lat, lng: row.lng },
     createdAt: new Date(row.created_at),
     ...(row.photo_url ? { photoUrl: row.photo_url } : {}),
+    ...(row.gone_votes ? { goneVotes: row.gone_votes } : {}),
+    ...(row.comments?.length ? { comments: row.comments } : {}),
   }
 }
 
@@ -52,6 +56,32 @@ export class SupabaseSignalisationStore implements SignalisationStore {
       body: JSON.stringify(toRow(signalisation)),
     })
     if (!response.ok) throw new Error(`Supabase : échec de l'enregistrement du signalement (HTTP ${response.status})`)
+  }
+
+  /** Fonctions SQL (voir migration) : le compteur de « plus là » doit être incrémenté de façon atomique */
+  private async rpc(name: string, args: Record<string, string>): Promise<Signalisation> {
+    const response = await fetch(`${this.endpoint.replace('/signalisations', '')}/rpc/${name}`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify(args),
+    })
+    if (!response.ok) throw new Error(`Supabase : échec de l'opération sur le signalement (HTTP ${response.status})`)
+    const rows = (await response.json()) as SignalisationRow[] | SignalisationRow
+    const row = Array.isArray(rows) ? rows[0] : rows
+    if (!row) throw new Error('Signalement introuvable ou limite de commentaires atteinte')
+    return fromRow(row)
+  }
+
+  confirm(id: string): Promise<Signalisation> {
+    return this.rpc('confirm_signalisation', { p_id: id })
+  }
+
+  reportGone(id: string): Promise<Signalisation> {
+    return this.rpc('report_signalisation_gone', { p_id: id })
+  }
+
+  addComment(id: string, text: string): Promise<Signalisation> {
+    return this.rpc('add_signalisation_comment', { p_id: id, p_comment: text })
   }
 
   async list(): Promise<Signalisation[]> {
