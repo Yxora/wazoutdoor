@@ -186,10 +186,16 @@ async function main() {
   const signalisationControl = createSignalisationControl({
     getCurrentPosition: () => locateUser(geolocator),
     findNearby: (position, type) => checkNearbySignalisations(signalisationStore, position, type),
-    onExisting: (existing, distanceM) => {
+    onExisting: async (existing, { stillThere, comment }) => {
+      let updated = stillThere
+        ? await confirmSignalisationStillThere(signalisationStore, existing.id)
+        : await reportSignalisationGone(signalisationStore, existing.id)
+      if (comment) updated = await commentSignalisation(signalisationStore, existing.id, comment)
+      signalisationLayer.replace(updated)
+      // L'utilisateur·rice vient de répondre : on centre la carte sans rouvrir la bulle
       nav.showMap()
-      signalisationLayer.focus(existing)
-      showToast(`Ce signalement existe déjà à ${Math.max(1, Math.round(distanceM))} m : confirmez-le ou ajoutez un commentaire.`)
+      signalisationLayer.focus(updated, { openPopup: false })
+      showToast('Merci, réponse bien prise en compte')
     },
     onSubmit: async ({ position, type, description, photo }) => {
       const signalisation = await reportSignalisation(signalisationStore, { position, type, description, photo }, photoStore)

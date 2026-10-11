@@ -3,6 +3,7 @@ import type { Coordinates } from '../domain/coordinates'
 import {
   SIGNALISATION_TYPE_LABEL,
   SIGNALISATION_TYPES,
+  MAX_COMMENT_LENGTH,
   type NearbySignalisations,
   type Signalisation,
   type SignalisationType,
@@ -22,12 +23,17 @@ export interface SignalisationInput {
   amend?: Signalisation
 }
 
+export interface ExistingAnswer {
+  stillThere: boolean
+  comment: string
+}
+
 export interface SignalisationControlDeps {
   /** Signalements déjà présents autour de la position, pour éviter les doublons */
   findNearby(position: Coordinates, type: SignalisationType): Promise<NearbySignalisations>
   getCurrentPosition(): Promise<LocationResult>
-  /** Un signalement de même type existe déjà à proximité : l'application ouvre le sien sur la carte */
-  onExisting(existing: Signalisation, distanceM: number): void
+  /** Un signalement de même type existe déjà à proximité : « Toujours là ? » (oui/non) et commentaire facultatif, appliqués à ce signalement */
+  onExisting(existing: Signalisation, answer: ExistingAnswer): Promise<void> | void
   /** Enregistre le signalement et bascule sur la carte, centrée dessus */
   onSubmit(input: SignalisationInput): Promise<void> | void
 }
@@ -86,6 +92,64 @@ function ask(host: HTMLElement, message: string, confirmLabel: string, cancelLab
     overlay.append(box)
     host.append(overlay)
     confirm.focus()
+  })
+}
+
+/** Un signalement de même type est déjà là : « Toujours là ? » oui/non + commentaire. Résout `null` si l'on annule. */
+function askStillThere(host: HTMLElement, existing: Signalisation, distanceM: number): Promise<ExistingAnswer | null> {
+  return new Promise((resolve) => {
+    const overlay = node('div', 'report-confirm')
+    const box = node('div', 'report-confirm__box')
+    box.setAttribute('role', 'alertdialog')
+    const label = SIGNALISATION_TYPE_LABEL[existing.type]
+    box.setAttribute('aria-label', `Signalement « ${label} » déjà présent`)
+    const text = node(
+      'p',
+      'report-confirm__text',
+      `Un signalement « ${label} » existe déjà à ${metersLabel(distanceM)}. Toujours là ?`,
+    )
+
+    let stillThere: boolean | null = null
+    const yes = node('button', 'od-button od-button--secondary', 'Oui')
+    const no = node('button', 'od-button od-button--secondary', 'Non')
+    yes.type = no.type = 'button'
+    const choose = (value: boolean) => {
+      stillThere = value
+      yes.setAttribute('aria-pressed', String(value))
+      no.setAttribute('aria-pressed', String(!value))
+      yes.classList.toggle('od-button--primary', value)
+      yes.classList.toggle('od-button--secondary', !value)
+      no.classList.toggle('od-button--primary', !value)
+      no.classList.toggle('od-button--secondary', value)
+      confirm.disabled = false
+    }
+    yes.addEventListener('click', () => choose(true))
+    no.addEventListener('click', () => choose(false))
+
+    const field = node('label', 'od-field')
+    const comment = node('textarea', 'od-textarea')
+    comment.rows = 3
+    comment.maxLength = MAX_COMMENT_LENGTH
+    comment.placeholder = 'Ajouter un commentaire (facultatif)'
+    field.append(comment)
+
+    const confirm = node('button', 'od-button od-button--primary', 'Valider')
+    const cancel = node('button', 'od-button od-button--secondary', 'Annuler')
+    confirm.type = cancel.type = 'button'
+    confirm.disabled = true
+    const answer = (value: ExistingAnswer | null) => {
+      overlay.remove()
+      resolve(value)
+    }
+    confirm.addEventListener('click', () => {
+      if (stillThere !== null) answer({ stillThere, comment: comment.value.trim() })
+    })
+    cancel.addEventListener('click', () => answer(null))
+
+    box.append(text, yes, no, field, confirm, cancel)
+    overlay.append(box)
+    host.append(overlay)
+    yes.focus()
   })
 }
 
@@ -237,10 +301,15 @@ export function createSignalisationControl(deps: SignalisationControlDeps): Sign
         // Évite les doublons : si la vérification échoue, on n'empêche pas d'envoyer
         const nearby = await findNearby(position, selectedType).catch((): NearbySignalisations => ({ otherTypes: [] }))
         if (nearby.sameType) {
-          // Pas de doublon : on ferme le formulaire et on ouvre le signalement existant (toujours là / plus là / commentaire)
+          // Pas de doublon : on pose la question sur le signalement existant (toujours là ? + commentaire)
           const { signalisation, distanceM } = nearby.sameType
+          const answer = await askStillThere(root, signalisation, distanceM)
+          if (!answer) {
+            submit.disabled = false
+            return
+          }
+          await onExisting(signalisation, answer)
           close()
-          onExisting(signalisation, distanceM)
           return
         }
         if (nearby.otherTypes.length) {

@@ -425,8 +425,8 @@ export interface SignalisationLayer {
   add(signalisation: Signalisation): void
   /** Remplace un signalement modifié (même identifiant) */
   replace(signalisation: Signalisation): void
-  /** Centre la carte sur le signalement et ouvre sa fenêtre */
-  focus(signalisation: Signalisation): void
+  /** Centre la carte sur le signalement et ouvre sa fenêtre (sauf `openPopup: false`) */
+  focus(signalisation: Signalisation, options?: { openPopup?: boolean }): void
   /** Types réglés sur « Red flag » par l'utilisateur·rice : leurs points émettent une onde rouge */
   setRedFlags(types: ReadonlySet<SignalisationType>): void
 }
@@ -511,9 +511,9 @@ export function createSignalisationLayer(map: L.Map, actions?: SignalisationActi
       signalisations = signalisations.map((s) => (s.id === signalisation.id ? signalisation : s))
       render()
     },
-    focus(signalisation) {
+    focus(signalisation, options) {
       // Le zoom relance le rendu (zoomend) : on rouvre la fenêtre sur le marqueur recréé une fois la carte arrivée
-      map.once('moveend', () => markers.get(signalisation.id)?.openPopup())
+      if (options?.openPopup !== false) map.once('moveend', () => markers.get(signalisation.id)?.openPopup())
       map.setView([signalisation.position.lat, signalisation.position.lng], Math.max(map.getZoom(), 16))
     },
     setRedFlags(types) {
