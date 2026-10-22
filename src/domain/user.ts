@@ -19,3 +19,12 @@ export const DEMO_USER: User = {
   preferences: { ...DEFAULT_PREFERENCES },
   signalisationPreferences: { ...DEFAULT_SIGNALISATION_PREFERENCES },
 }
+
+/** Sans compte : critères standards, les trois profils proposés, rien de personnalisable */
+export const STANDARD_USER: User = {
+  id: 'standard',
+  name: 'Invité·e',
+  activities: ['randonneur', 'traileur', 'vttiste'],
+  preferences: { ...DEFAULT_PREFERENCES },
+  signalisationPreferences: { ...DEFAULT_SIGNALISATION_PREFERENCES },
+}
