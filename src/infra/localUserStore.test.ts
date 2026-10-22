@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEMO_USER } from '../domain/user'
+import { DEMO_USER, STANDARD_USER } from '../domain/user'
 import { LocalUserStore } from './localUserStore'
 
 function fakeStorage(initial: Record<string, string> = {}): Storage {
@@ -39,5 +39,9 @@ describe('LocalUserStore', () => {
   it('ne plante pas quand le stockage refuse l’écriture', () => {
     const storage = { getItem: () => null, setItem: () => { throw new Error('quota') } } as unknown as Storage
     expect(() => new LocalUserStore(storage).save(DEMO_USER)).not.toThrow()
+  })
+
+  it('retombe sur la valeur de repli choisie (critères standards pour un compte)', () => {
+    expect(new LocalUserStore(fakeStorage(), STANDARD_USER).get()).toEqual(STANDARD_USER)
   })
 })

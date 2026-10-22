@@ -702,3 +702,44 @@
 .signin [hidden] {
   display: none;
 }
+
+/* Dans le panneau Personnaliser, les règles `#panel button` passent avant les classes od-* */
+#panel .od-button--primary {
+  background: var(--od-brand);
+  border-color: var(--od-brand);
+  color: var(--od-ink-inverse);
+}
+
+#panel .od-button--primary:disabled {
+  opacity: 0.6;
+}
+
+#panel .signin__link {
+  padding: 0 var(--od-space-2);
+  font: var(--od-caption);
+  color: var(--od-brand);
+  background: none;
+  border: none;
+}
+
+.account-panel {
+  display: grid;
+  gap: var(--od-space-3);
+}
+
+.account-panel h2,
+.account-panel p {
+  margin: 0;
+}
+
+.account-bar {
+  display: grid;
+  gap: var(--od-space-2);
+  margin-top: var(--od-space-6);
+  padding-top: var(--od-space-4);
+  border-top: 1px solid var(--od-line);
+}
+
+.account-bar p {
+  margin: 0;
+}
