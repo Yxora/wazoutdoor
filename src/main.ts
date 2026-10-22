@@ -8,8 +8,9 @@ import {
 } from './application/maintainSignalisation'
 import { listActiveSignalisations } from './application/listSignalisations'
 import { locateUser } from './application/locateUser'
-import type { PhotoStore, SignalisationStore } from './application/ports'
+import type { AuthGateway, PhotoStore, SignalisationStore } from './application/ports'
 import { reportSignalisation } from './application/reportSignalisation'
+import { finishSignIn, sendSignInLink, verifyCode } from './application/signIn'
 import { updateUser } from './application/updateUser'
 import { PROFILES } from './domain/profile'
 import { SIGNALISATION_TYPES, type SignalisationPreferences, type SignalisationType } from './domain/signalisation'
@@ -28,6 +29,7 @@ import { OpenMeteoDaylight } from './infra/openMeteoDaylight'
 import { OpenMeteoForecast } from './infra/openMeteoForecast'
 import { RefugesInfoPlaces } from './infra/refugesInfoPlaces'
 import { StravaRoutes } from './infra/stravaRoutes'
+import { callbackUrl, isSignInReturn, SupabaseAuth } from './infra/supabaseAuth'
 import { SupabaseHealth } from './infra/supabaseHealth'
 import { SupabasePhotoStore } from './infra/supabasePhotoStore'
 import { SupabaseSignalisationStore } from './infra/supabaseSignalisationStore'
@@ -37,6 +39,7 @@ import { createImportModal } from './ui/importModal'
 import { playScoreEffect } from './ui/scoreEffect'
 import { createScoreView, type ResultView } from './ui/scoreView'
 import { createSignalisationControl } from './ui/signalisationControl'
+import { createSignInForm } from './ui/signInForm'
 import { showToast } from './ui/toast'
 import { createUserProfile } from './ui/userProfile'
 import './ui/tokens.css'
@@ -44,8 +47,6 @@ import './ui/style.css'
 import './ui/signalisation.css'
 
 const parser = new GpxRouteParser()
-// Provisoire : compte de démo toujours connecté, en attendant SupabaseAuth (plan.md, étape 2)
-const auth = new LocalAuth()
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -77,6 +78,28 @@ async function checkSupabase() {
   const result = await checkDatabase(new SupabaseHealth(supabaseUrl, supabaseAnonKey))
   if (result.ok) console.log('Supabase OK')
   else console.error(`Supabase KO : ${result.detail}`)
+}
+
+/** Comptes Supabase si configuré ; sinon Julie, toujours connectée, pour la démo hors ligne */
+async function createAuth(): Promise<AuthGateway> {
+  if (!supabaseUrl || !supabaseAnonKey) return new LocalAuth()
+  return SupabaseAuth.create({ url: supabaseUrl, anonKey: supabaseAnonKey, redirectTo: callbackUrl(location.origin + location.pathname) })
+}
+
+/**
+ * Au retour du lien de connexion (?auth=callback&code=...) : on termine la connexion puis on nettoie l'URL.
+ * À faire avant le retour Strava, qui prendrait ce ?code= pour le sien.
+ */
+async function completeSignInReturn(auth: AuthGateway): Promise<string | null> {
+  const url = new URL(location.href)
+  if (!isSignInReturn(url)) return null
+  history.replaceState(null, '', location.pathname)
+  try {
+    await finishSignIn(auth, url)
+    return null
+  } catch (error) {
+    return error instanceof Error ? error.message : 'Connexion impossible.'
+  }
 }
 
 function createStravaLibrary(): StravaRoutes | undefined {
@@ -118,6 +141,10 @@ function redFlagTypes(preferences: SignalisationPreferences): Set<SignalisationT
 }
 
 async function main() {
+  const auth = await createAuth()
+  const signInError = await completeSignInReturn(auth)
+  if (signInError) showToast(signInError)
+
   const strava = createStravaLibrary()
   const params = new URLSearchParams(location.search)
   const returnedFromStrava = params.has('code') || params.has('error')
@@ -200,6 +227,14 @@ async function main() {
       signalisationLayer.focus(updated, { openPopup: false })
       showToast('Merci, réponse bien prise en compte')
     },
+    isSignedIn: () => auth.current() !== null,
+    createSignInForm: () =>
+      createSignInForm({
+        sendLink: (email) => sendSignInLink(auth, email),
+        verifyCode: async (email, code) => {
+          await verifyCode(auth, email, code)
+        },
+      }),
     onSubmit: async ({ position, type, description, photo }) => {
       const signalisation = await reportSignalisation(auth, signalisationStore, { position, type, description, photo }, photoStore)
       signalisationLayer.add(signalisation)
@@ -230,6 +265,9 @@ async function main() {
 
   // Signaler est l'onglet par défaut : son écran s'ouvre dès l'arrivée (sauf au retour de Strava)
   if (!returnedFromStrava) signalisationControl.start()
+
+  // Connexion par code, par le lien dans un autre onglet, ou session expirée
+  auth.onChange(() => signalisationControl.refresh())
 
   checkSupabase()
 }

@@ -1,3 +1,4 @@
+import { AuthError } from '../application/authError'
 import type { LocationResult } from '../application/ports'
 import type { Coordinates } from '../domain/coordinates'
 import {
@@ -36,6 +37,9 @@ export interface SignalisationControlDeps {
   onExisting(existing: Signalisation, answer: ExistingAnswer): Promise<void> | void
   /** Enregistre le signalement et bascule sur la carte, centrée dessus */
   onSubmit(input: SignalisationInput): Promise<void> | void
+  /** Signaler demande un compte : sans compte, la page affiche le formulaire de connexion */
+  isSignedIn(): boolean
+  createSignInForm(): HTMLElement
 }
 
 export interface SignalisationControl {
@@ -43,6 +47,8 @@ export interface SignalisationControl {
   start(): void
   /** Ferme la page (changement d'onglet, croix) */
   close(): void
+  /** Le compte a changé : la page passe de la connexion au formulaire, sans perdre une saisie en cours */
+  refresh(): void
 }
 
 function icon(pathD: string, size: number, className: string): SVGSVGElement {
@@ -159,13 +165,18 @@ function askStillThere(host: HTMLElement, existing: Signalisation, distanceM: nu
  * Déclenché par l'onglet « Signaler » du menu du bas.
  */
 export function createSignalisationControl(deps: SignalisationControlDeps): SignalisationControl {
-  const { getCurrentPosition, findNearby, onExisting, onSubmit } = deps
+  const { getCurrentPosition, findNearby, onExisting, onSubmit, isSignedIn, createSignInForm } = deps
   let page: HTMLElement | null = null
+  /** La page ouverte est-elle le formulaire (sinon, la connexion) ? */
+  let pageIsForm = false
+  /** Connexion demandée par-dessus le formulaire, quand la session a expiré pendant la saisie */
+  let signInOverlay: HTMLElement | null = null
 
   function close() {
     document.removeEventListener('keydown', onKeydown)
     page?.remove()
     page = null
+    signInOverlay = null
   }
 
   function onKeydown(event: KeyboardEvent) {
@@ -174,9 +185,66 @@ export function createSignalisationControl(deps: SignalisationControlDeps): Sign
 
   function start() {
     if (page) return
-    page = build()
+    pageIsForm = isSignedIn()
+    page = pageIsForm ? build() : buildSignIn()
     document.addEventListener('keydown', onKeydown)
     document.body.append(page)
+  }
+
+  function refresh() {
+    if (!page || !isSignedIn()) return
+    if (pageIsForm) {
+      // Reconnecté·e pendant la saisie : le formulaire reste tel quel
+      signInOverlay?.remove()
+      signInOverlay = null
+      return
+    }
+    close()
+    start()
+  }
+
+  function header(title: string): HTMLElement {
+    const closeButton = node('button', 'od-sheet__close')
+    closeButton.type = 'button'
+    closeButton.setAttribute('aria-label', 'Fermer')
+    closeButton.append(icon(CLOSE_ICON_PATH, 18, 'od-sheet__close-icon'))
+    closeButton.addEventListener('click', close)
+    const bar = node('div', 'report-page__header')
+    bar.append(node('h2', 'od-sheet__title', title), closeButton)
+    return bar
+  }
+
+  function buildSignIn(): HTMLElement {
+    const root = node('div', 'report-page')
+    root.setAttribute('role', 'dialog')
+    root.setAttribute('aria-label', 'Connectez-vous pour signaler')
+    const body = node('div', 'report-page__body')
+    body.append(
+      createBrandLogo(),
+      node('p', 'signin__text', 'Pour limiter les abus, signaler un danger demande un compte. Un email suffit, sans mot de passe.'),
+      createSignInForm(),
+    )
+    root.append(header('Connectez-vous pour signaler'), body)
+    return root
+  }
+
+  /** La session a expiré pendant la saisie : on demande de se reconnecter par-dessus, sans perdre le formulaire */
+  function askToSignIn(host: HTMLElement) {
+    if (signInOverlay) return
+    const overlay = node('div', 'report-confirm')
+    const box = node('div', 'report-confirm__box')
+    box.setAttribute('role', 'alertdialog')
+    box.setAttribute('aria-label', 'Reconnectez-vous pour envoyer')
+    const cancel = node('button', 'signin__link', 'Annuler')
+    cancel.type = 'button'
+    cancel.addEventListener('click', () => {
+      overlay.remove()
+      signInOverlay = null
+    })
+    box.append(node('p', 'report-confirm__text', 'Reconnectez-vous pour envoyer votre signalement.'), createSignInForm(), cancel)
+    overlay.append(box)
+    host.append(overlay)
+    signInOverlay = overlay
   }
 
   function build(): HTMLElement {
@@ -187,14 +255,6 @@ export function createSignalisationControl(deps: SignalisationControlDeps): Sign
     const root = node('div', 'report-page')
     root.setAttribute('role', 'dialog')
     root.setAttribute('aria-label', 'Signaler un danger')
-
-    const closeButton = node('button', 'od-sheet__close')
-    closeButton.type = 'button'
-    closeButton.setAttribute('aria-label', 'Fermer')
-    closeButton.append(icon(CLOSE_ICON_PATH, 18, 'od-sheet__close-icon'))
-    closeButton.addEventListener('click', close)
-    const header = node('div', 'report-page__header')
-    header.append(node('h2', 'od-sheet__title', 'Signaler un danger'), closeButton)
 
     const body = node('div', 'report-page__body')
     // Dans la zone qui défile : le logo part avec le contenu au lieu de rester collé en haut
@@ -271,7 +331,7 @@ export function createSignalisationControl(deps: SignalisationControlDeps): Sign
     const footer = node('div', 'report-page__footer')
     footer.append(errorMessage, submit)
 
-    root.append(header, body, footer)
+    root.append(header('Signaler un danger'), body, footer)
 
     async function locate() {
       submit.disabled = true
@@ -330,6 +390,11 @@ export function createSignalisationControl(deps: SignalisationControlDeps): Sign
         close()
         showToast('Signalement bien envoyé')
       } catch (error) {
+        if (error instanceof AuthError && error.code === 'not_signed_in') {
+          askToSignIn(root)
+          submit.disabled = false
+          return
+        }
         errorMessage.textContent = `Envoi impossible : ${error instanceof Error ? error.message : 'erreur réseau'}. Réessayez.`
         errorMessage.hidden = false
         submit.disabled = false
@@ -340,5 +405,5 @@ export function createSignalisationControl(deps: SignalisationControlDeps): Sign
     return root
   }
 
-  return { start, close }
+  return { start, close, refresh }
 }

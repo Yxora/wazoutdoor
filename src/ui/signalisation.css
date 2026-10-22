@@ -3,6 +3,8 @@
 .od-button:focus-visible,
 .od-tile:focus-visible,
 .od-textarea:focus-visible,
+.od-input:focus-visible,
+.signin__link:focus-visible,
 .od-sheet__close:focus-visible {
   outline: none;
   box-shadow: var(--od-focus-ring);
@@ -114,6 +116,19 @@
   box-sizing: border-box;
   resize: vertical;
   font-family: var(--od-font-text);
+}
+
+.od-input {
+  font: var(--od-body);
+  font-family: var(--od-font-text);
+  color: var(--od-ink);
+  background: var(--od-surface-raised);
+  border: 1px solid var(--od-line);
+  border-radius: var(--od-radius-md);
+  padding: 0 var(--od-space-3);
+  min-height: var(--od-size-touch);
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .od-grid {
@@ -651,4 +666,39 @@
 .od-popup__talk {
   flex-basis: 100%;
   justify-content: center;
+}
+
+/* Connexion par email : l'email, puis le code à 6 chiffres */
+.signin__step {
+  display: grid;
+  gap: var(--od-space-3);
+}
+
+.signin__text {
+  margin: 0;
+  font: var(--od-body);
+  color: var(--od-ink);
+}
+
+.signin__code {
+  font: var(--od-title-2);
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.signin__link {
+  justify-self: center;
+  min-height: var(--od-size-touch);
+  padding: 0 var(--od-space-2);
+  font: var(--od-caption);
+  color: var(--od-brand);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  border-radius: var(--od-radius-md);
+  cursor: pointer;
+}
+
+.signin [hidden] {
+  display: none;
 }
