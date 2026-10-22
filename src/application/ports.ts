@@ -1,3 +1,4 @@
+import type { Account } from '../domain/account'
 import type { Coordinates } from '../domain/coordinates'
 import type { FireDetection } from '../domain/fire'
 import type { HourlyForecast } from '../domain/forecast'
@@ -118,4 +119,21 @@ export interface RouteLibrary {
 export interface UserStore {
   get(): User
   save(user: User): void
+}
+
+/** Connexion par email : lien magique (flux PKCE) ou code à 6 chiffres reçus dans le même email */
+export interface AuthGateway {
+  /** Compte connecté, sans appel réseau ; null sans session */
+  current(): Account | null
+  /** Envoie l'email de connexion (le premier crée le compte) et garde le code_verifier PKCE */
+  sendSignInLink(email: string): Promise<void>
+  /** Au retour du lien : échange le code contre une session ; null si l'URL n'est pas un retour de lien */
+  finishSignIn(url: URL): Promise<Account | null>
+  /** Code à 6 chiffres reçu par email, saisi dans l'app */
+  verifyCode(email: string, code: string): Promise<Account>
+  /** Jeton à joindre aux appels Supabase, rafraîchi si besoin ; null sans session */
+  accessToken(): Promise<string | null>
+  signOut(): Promise<void>
+  deleteAccount(): Promise<void>
+  onChange(listener: (account: Account | null) => void): void
 }

@@ -18,6 +18,7 @@ import { FixedGeolocator, positionFromSearch } from './infra/fixedGeolocator'
 import { GpxRouteParser } from './infra/gpxRouteParser'
 import { IgnElevation } from './infra/ignElevation'
 import { IgnProtectedAreas } from './infra/ignProtectedAreas'
+import { LocalAuth } from './infra/localAuth'
 import { LocalPhotoStore } from './infra/localPhotoStore'
 import { LocalSignalisationStore } from './infra/localSignalisationStore'
 import { LocalUserStore } from './infra/localUserStore'
@@ -43,6 +44,8 @@ import './ui/style.css'
 import './ui/signalisation.css'
 
 const parser = new GpxRouteParser()
+// Provisoire : compte de démo toujours connecté, en attendant SupabaseAuth (plan.md, étape 2)
+const auth = new LocalAuth()
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -131,7 +134,7 @@ async function main() {
   let lastView: ResultView | null = null
 
   const userProfile = createUserProfile(userStore.get(), (changes) => {
-    const user = updateUser(userStore, changes)
+    const user = updateUser(auth, userStore, changes)
     importModal.setActivities(user.activities)
     signalisationLayer.setRedFlags(redFlagTypes(user.signalisationPreferences))
     // Le score se recalcule sur les données déjà reçues, sans rappeler les sources
@@ -174,9 +177,9 @@ async function main() {
   })
 
   const signalisationLayer = createSignalisationLayer(map, {
-    confirm: (s) => confirmSignalisationStillThere(signalisationStore, s.id),
-    reportGone: (s) => reportSignalisationGone(signalisationStore, s.id),
-    comment: (s, text) => commentSignalisation(signalisationStore, s.id, text),
+    confirm: (s) => confirmSignalisationStillThere(auth, signalisationStore, s.id),
+    reportGone: (s) => reportSignalisationGone(auth, signalisationStore, s.id),
+    comment: (s, text) => commentSignalisation(auth, signalisationStore, s.id, text),
   })
   signalisationLayer.setRedFlags(redFlagTypes(userStore.get().signalisationPreferences))
   listActiveSignalisations(signalisationStore)
@@ -188,9 +191,9 @@ async function main() {
     findNearby: (position, type) => checkNearbySignalisations(signalisationStore, position, type),
     onExisting: async (existing, { stillThere, comment }) => {
       let updated = stillThere
-        ? await confirmSignalisationStillThere(signalisationStore, existing.id)
-        : await reportSignalisationGone(signalisationStore, existing.id)
-      if (comment) updated = await commentSignalisation(signalisationStore, existing.id, comment)
+        ? await confirmSignalisationStillThere(auth, signalisationStore, existing.id)
+        : await reportSignalisationGone(auth, signalisationStore, existing.id)
+      if (comment) updated = await commentSignalisation(auth, signalisationStore, existing.id, comment)
       signalisationLayer.replace(updated)
       // L'utilisateur·rice vient de répondre : on centre la carte sans rouvrir la bulle
       nav.showMap()
@@ -198,7 +201,7 @@ async function main() {
       showToast('Merci, réponse bien prise en compte')
     },
     onSubmit: async ({ position, type, description, photo }) => {
-      const signalisation = await reportSignalisation(signalisationStore, { position, type, description, photo }, photoStore)
+      const signalisation = await reportSignalisation(auth, signalisationStore, { position, type, description, photo }, photoStore)
       signalisationLayer.add(signalisation)
       // Après l'envoi : retour sur la carte, centrée sur le nouveau signalement
       nav.showMap()
