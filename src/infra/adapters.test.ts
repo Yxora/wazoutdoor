@@ -371,6 +371,8 @@ describe('SupabaseSignalisationStore', () => {
       },
     ])
     expect(calls[0].url).toContain('order=created_at.desc')
+    expect(calls[0].url).not.toContain('user_id')
+    expect(calls[0].url).not.toContain('select=*')
     expect(calls[0].headers).toMatchObject({ Authorization: 'Bearer anon-key' })
   })
 })
@@ -501,7 +503,7 @@ describe('SupabasePhotoStore', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
-  it('dépose la photo dans le dossier du compte, avec son jeton', async () => {
+  it('dépose la photo avec le jeton du compte, sans son identifiant dans l’adresse', async () => {
     const calls: { url: string; init?: RequestInit }[] = []
     vi.stubGlobal(
       'fetch',
@@ -513,9 +515,9 @@ describe('SupabasePhotoStore', () => {
     const store = new SupabasePhotoStore('https://example.supabase.co', 'anon-key', signedIn)
     const url = await store.upload('a1', 'data:image/jpeg;base64,AAAA')
 
-    expect(calls[1].url).toBe('https://example.supabase.co/storage/v1/object/signalisation-photos/u1/a1.jpg')
+    expect(calls[1].url).toBe('https://example.supabase.co/storage/v1/object/signalisation-photos/a1.jpg')
     expect(calls[1].init?.headers).toMatchObject({ apikey: 'anon-key', Authorization: 'Bearer jeton-julie' })
-    expect(url).toBe('https://example.supabase.co/storage/v1/object/public/signalisation-photos/u1/a1.jpg')
+    expect(url).toBe('https://example.supabase.co/storage/v1/object/public/signalisation-photos/a1.jpg')
   })
 
   it('sans session, n’envoie rien et demande de se connecter', async () => {

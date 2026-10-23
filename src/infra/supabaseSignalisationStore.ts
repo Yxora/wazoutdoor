@@ -53,6 +53,9 @@ export function rejectedAccount(response: Response): boolean {
   return response.status === 401 || response.status === 403
 }
 
+/** Colonnes lisibles par tout le monde : tout sauf l'auteur·rice (user_id, voir migration hide_author) */
+const PUBLIC_COLUMNS = 'id,type,description,lat,lng,created_at,photo_url,gone_votes,comments,resolved_at'
+
 /** Erreur levée par une fonction SQL (`already_voted`, `not_owner`) : PostgREST la renvoie en HTTP 400 */
 async function sqlError(response: Response): Promise<string | null> {
   if (response.status !== 400) return null
@@ -156,7 +159,7 @@ export class SupabaseSignalisationStore implements SignalisationStore {
   }
 
   async list(): Promise<Signalisation[]> {
-    const response = await fetch(`${this.endpoint}?select=*&order=created_at.desc`, { headers: this.headers })
+    const response = await fetch(`${this.endpoint}?select=${PUBLIC_COLUMNS}&order=created_at.desc`, { headers: this.headers })
     if (!response.ok) throw new Error(`Supabase : échec de la lecture des signalements (HTTP ${response.status})`)
     const rows = (await response.json()) as SignalisationRow[]
     return rows.map(fromRow)

@@ -47,11 +47,14 @@ select lives_ok(
   $$ insert into public.signalisations (type, lat, lng) values ('boue', 48, 7) $$,
   'un compte peut signaler'
 );
+-- user_id n'est plus lisible par les comptes (20261023180000_hide_author.sql) : vérification hors RLS
+reset role;
 select is(
   (select user_id from public.signalisations where type = 'boue'),
   '00000000-0000-0000-0000-00000000000a'::uuid,
   'le signalement est rattaché au compte'
 );
+set local role authenticated;
 select throws_ok(
   $$ insert into public.signalisations (type, lat, lng, user_id)
      values ('neige', 48, 7, '00000000-0000-0000-0000-00000000000b') $$,
