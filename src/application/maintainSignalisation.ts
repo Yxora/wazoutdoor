@@ -20,7 +20,7 @@ export async function confirmSignalisationStillThere(auth: Pick<AuthGateway, 'cu
   return store.confirm(id)
 }
 
-/** « Plus là » : à deux voix, le signalement est résolu et disparaît de la carte et du score */
+/** « Plus là » : à deux voix, le signalement est résolu et disparaît de la carte et du score ; tout de suite si c'est le sien */
 export async function reportSignalisationGone(auth: Pick<AuthGateway, 'current'>, store: SignalisationStore, id: string): Promise<Signalisation> {
   requireAccount(auth)
   return store.reportGone(id)
@@ -44,14 +44,8 @@ export async function listMySignalisations(auth: Pick<AuthGateway, 'current'>, s
   return new Set(await store.mySignalisations())
 }
 
-/** L'auteur·rice dit que le danger n'est plus là : le signalement quitte la carte et le score, sans être effacé */
-export async function resolveOwnSignalisation(auth: Pick<AuthGateway, 'current'>, store: SignalisationStore, id: string): Promise<Signalisation> {
-  requireAccount(auth)
-  return store.resolve(id)
-}
-
 /**
- * L'auteur·rice supprime son signalement. La photo part en premier : si son effacement échoue, rien n'est supprimé,
+ * L'auteur·rice supprime son signalement (signalé par erreur). La photo part en premier : si son effacement échoue, rien n'est supprimé,
  * pour ne pas laisser une photo publique sans signalement.
  */
 export async function deleteOwnSignalisation(

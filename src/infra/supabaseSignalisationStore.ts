@@ -143,10 +143,6 @@ export class SupabaseSignalisationStore implements SignalisationStore {
     return this.ids('my_signalisations')
   }
 
-  resolve(id: string): Promise<Signalisation> {
-    return this.rpc('resolve_signalisation', { p_id: id })
-  }
-
   async remove(id: string): Promise<void> {
     await this.call('delete_signalisation', { p_id: id })
   }

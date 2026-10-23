@@ -4,7 +4,7 @@ import type { Coordinates } from '../domain/coordinates'
 import { PLACE_CATEGORY_LABEL, type Place, type PlaceCategory } from '../domain/place'
 import type { ProtectedArea } from '../domain/protectedArea'
 import type { Route } from '../domain/route'
-import { isGonePending, isLive, SIGNALISATION_TYPE_LABEL, signalisationStatus, type Signalisation, type SignalisationType } from '../domain/signalisation'
+import { isGonePending, isLive, isResolved, SIGNALISATION_TYPE_LABEL, signalisationStatus, type Signalisation, type SignalisationType } from '../domain/signalisation'
 import { pictoIcon } from './pictos'
 import { isDisplayablePhoto } from './photo'
 import { openPhotoViewer } from './photoViewer'
@@ -315,7 +315,7 @@ function lifecycleButtons(
   const message = document.createElement('p')
   message.className = 'od-popup__message'
   message.setAttribute('role', 'status')
-  const make = (label: string, fullName: string, tone: 'ok' | 'closed', iconPath: string, run: () => Promise<Signalisation>, done: string) => {
+  const make = (label: string, fullName: string, tone: 'ok' | 'closed', iconPath: string, run: () => Promise<Signalisation>, done: (updated: Signalisation) => string) => {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = `od-button od-popup__vote od-popup__vote--${tone}`
@@ -331,7 +331,7 @@ function lifecycleButtons(
       try {
         const updated = await run()
         // La carte se redessine (la fenêtre se ferme) : le retour passe par le toast
-        showToast(done)
+        showToast(done(updated))
         onChanged(updated)
       } catch (error) {
         message.textContent = `Impossible : ${error instanceof Error ? error.message : 'erreur réseau'}`
@@ -340,7 +340,7 @@ function lifecycleButtons(
     })
     return button
   }
-  const still = make('Oui', 'Toujours là', 'ok', CHECK_ICON_PATH, () => actions.confirm(signalisation), 'Merci, signalement confirmé.')
+  const still = make('Oui', 'Toujours là', 'ok', CHECK_ICON_PATH, () => actions.confirm(signalisation), () => 'Merci, signalement confirmé.')
   const gone = make(
     'Non',
     'Plus là',
@@ -351,7 +351,8 @@ function lifecycleButtons(
       account.rememberGoneVote(signalisation.id)
       return updated
     },
-    'Merci. Il disparaît quand deux personnes disent qu’il n’y est plus.',
+    // Son propre signalement est résolu tout de suite ; sinon il faut un second vote
+    (updated) => (isResolved(updated) ? 'Merci, il est retiré de la carte.' : 'Merci. Il disparaît quand deux personnes disent qu’il n’y est plus.'),
   )
   const votes = document.createElement('div')
   votes.className = 'od-popup__votes'
@@ -435,13 +436,13 @@ function signalisationPopup(
   return box
 }
 
-/** L'auteur·rice supprime son signalement : il est effacé avec sa photo et ses commentaires */
+/** L'auteur·rice supprime son signalement (signalé par erreur) : il est effacé avec sa photo et ses commentaires */
 function openRemoveDialog(signalisation: Signalisation, actions: SignalisationActions, onRemoved: (id: string) => void): void {
   const label = SIGNALISATION_TYPE_LABEL[signalisation.type]
   const { box, close } = openDialog({ title: 'Supprimer mon signalement', label: `Supprimer mon signalement : ${label}` })
   const intro = document.createElement('p')
   intro.className = 'signin__text'
-  intro.textContent = `${label} : il sera effacé, avec sa photo et ses commentaires.`
+  intro.textContent = `${label} signalé par erreur ? Il sera effacé, avec sa photo et ses commentaires.`
   const error = document.createElement('p')
   error.className = 'od-error'
   error.setAttribute('role', 'alert')

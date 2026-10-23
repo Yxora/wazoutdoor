@@ -12,7 +12,7 @@ function fakeStore(): SignalisationStore & { saved: Signalisation[] } {
     save: async (signalisation) => {
       saved.push(signalisation)
     },
-    confirm: async () => Promise.reject(new Error('inutilisé')), reportGone: async () => Promise.reject(new Error('inutilisé')), addComment: async () => Promise.reject(new Error('inutilisé')), myGoneVotes: async () => [], mySignalisations: async () => [], resolve: async () => Promise.reject(new Error('inutilisé')), remove: async () => {},
+    confirm: async () => Promise.reject(new Error('inutilisé')), reportGone: async () => Promise.reject(new Error('inutilisé')), addComment: async () => Promise.reject(new Error('inutilisé')), myGoneVotes: async () => [], mySignalisations: async () => [], remove: async () => {},
     list: async () => saved,
   }
 }

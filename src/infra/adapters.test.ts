@@ -409,9 +409,11 @@ describe('LocalSignalisationStore : votes « Plus là »', () => {
   const tree: Signalisation = { id: 'a1', type: 'arbre', description: '', position: { lat: 48, lng: 7 }, createdAt: new Date() }
 
   it('refuse un second vote, puis l’accepte après « Toujours là »', async () => {
-    vi.stubGlobal('localStorage', memoryStorage())
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
     const store = new LocalSignalisationStore()
-    await store.save(tree)
+    // Signalement de quelqu'un d'autre (le sien serait résolu au premier « Plus là »)
+    storage.setItem('wazoutdoor:signalisations', JSON.stringify([{ ...tree, createdAt: tree.createdAt.toISOString() }]))
 
     expect((await store.reportGone('a1')).goneVotes).toBe(1)
     expect(await store.myGoneVotes()).toEqual(['a1'])
@@ -438,13 +440,13 @@ describe('SupabaseSignalisationStore : retrait par l’auteur·rice', () => {
       vi.fn(async () => new Response(JSON.stringify({ code: 'P0001', message: 'not_owner' }), { status: 400 })),
     )
     const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
-    await expect(store.resolve('a1')).rejects.toThrow('Seule la personne qui l’a signalé peut le retirer.')
+    await expect(store.remove('a1')).rejects.toThrow('Seule la personne qui l’a signalé peut le retirer.')
   })
 
-  it('relit la date de résolution', async () => {
-    stubFetch({ 'rpc/resolve_signalisation': [{ id: 'a1', type: 'arbre', description: '', lat: 48, lng: 7, created_at: '2026-10-10T08:30:00.000Z', resolved_at: '2026-10-11T08:30:00.000Z' }] })
+  it('relit la date de résolution (« Plus là » de l’auteur·rice)', async () => {
+    stubFetch({ 'rpc/report_signalisation_gone': [{ id: 'a1', type: 'arbre', description: '', lat: 48, lng: 7, created_at: '2026-10-10T08:30:00.000Z', resolved_at: '2026-10-11T08:30:00.000Z' }] })
     const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
-    expect((await store.resolve('a1')).resolvedAt).toEqual(new Date('2026-10-11T08:30:00.000Z'))
+    expect((await store.reportGone('a1')).resolvedAt).toEqual(new Date('2026-10-11T08:30:00.000Z'))
   })
 
   it('liste les signalements du compte', async () => {
@@ -461,16 +463,18 @@ describe('LocalSignalisationStore : retrait par l’auteur·rice', () => {
   }
   const tree: Signalisation = { id: 'a1', type: 'arbre', description: '', position: { lat: 48, lng: 7 }, createdAt: new Date() }
 
-  it('marque résolu ou supprime ses propres signalements seulement', async () => {
+  it('« Plus là » résout son propre signalement ; seul·e l’auteur·rice supprime', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
     const store = new LocalSignalisationStore()
     await store.save(tree)
     expect(await store.mySignalisations()).toEqual(['a1'])
 
-    const resolved = await store.resolve('a1')
+    const resolved = await store.reportGone('a1')
     expect(resolved.resolvedAt).toBeInstanceOf(Date)
+    expect(resolved.goneVotes).toBeUndefined()
     expect((await store.list())[0].resolvedAt).toBeInstanceOf(Date)
+    expect(await store.myGoneVotes()).toEqual([])
 
     await store.remove('a1')
     expect(await store.list()).toEqual([])

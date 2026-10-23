@@ -85,15 +85,16 @@ export interface SignalisationStore {
   save(signalisation: Signalisation): Promise<void>
   /** « Toujours là » : la date repart de maintenant, les « plus là » sont remis à zéro */
   confirm(id: string): Promise<Signalisation>
-  /** « Plus là » : une voix de plus ; à deux voix le signalement est résolu. Un seul vote par personne (`ALREADY_VOTED_GONE`) */
+  /**
+   * « Plus là » : une voix de plus ; à deux voix le signalement est résolu. Un seul vote par personne (`ALREADY_VOTED_GONE`).
+   * Venu de son auteur·rice, le signalement est résolu tout de suite.
+   */
   reportGone(id: string): Promise<Signalisation>
   /** Identifiants des signalements où la personne connectée a voté « plus là » */
   myGoneVotes(): Promise<string[]>
   /** Identifiants des signalements créés par la personne connectée */
   mySignalisations(): Promise<string[]>
-  /** L'auteur·rice le marque résolu : il quitte la carte, reste en base */
-  resolve(id: string): Promise<Signalisation>
-  /** L'auteur·rice le supprime, avec ses commentaires et ses votes */
+  /** L'auteur·rice le supprime (signalé par erreur), avec ses commentaires et ses votes */
   remove(id: string): Promise<void>
   /** Ajoute un commentaire (vide ou limite atteinte : signalement inchangé) */
   addComment(id: string, text: string): Promise<Signalisation>

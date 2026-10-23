@@ -25,6 +25,8 @@ export class LocalSignalisationStore implements SignalisationStore {
   }
 
   async reportGone(id: string): Promise<Signalisation> {
+    // Son propre signalement : l'auteur·rice sait que le danger a disparu
+    if ((await this.mySignalisations()).includes(id)) return this.change(id, (s) => markResolved(s))
     const voted = await this.myGoneVotes()
     if (voted.includes(id)) throw new Error(ALREADY_VOTED_GONE)
     const updated = await this.change(id, reportGone)
@@ -38,11 +40,6 @@ export class LocalSignalisationStore implements SignalisationStore {
 
   async mySignalisations(): Promise<string[]> {
     return this.readIds(MINE_KEY)
-  }
-
-  async resolve(id: string): Promise<Signalisation> {
-    await this.requireMine(id)
-    return this.change(id, (s) => markResolved(s))
   }
 
   async remove(id: string): Promise<void> {

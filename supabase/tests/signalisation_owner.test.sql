@@ -2,7 +2,7 @@
 -- Lancer avec `supabase test db` sur une base locale (`supabase start`), jamais sur la base de production.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(7);
+select plan(9);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'julie@exemple.fr'),
@@ -15,9 +15,13 @@ insert into public.signalisations (id, type, lat, lng, user_id) values
 set local role authenticated;
 select set_config('request.jwt.claims',
   '{"role":"authenticated","sub":"00000000-0000-0000-0000-00000000000b","is_anonymous":false}', true);
-select throws_ok(
-  $$ select public.resolve_signalisation('11111111-1111-1111-1111-111111111111') $$,
-  'P0001', 'not_owner', 'un autre compte ne peut pas résoudre'
+select is(
+  (select gone_votes from public.report_signalisation_gone('11111111-1111-1111-1111-111111111111')),
+  1, '« Plus là » d’un autre compte : un vote'
+);
+select is(
+  (select resolved_at from public.signalisations where id = '11111111-1111-1111-1111-111111111111'),
+  null, 'le vote d’un autre compte ne résout pas'
 );
 select throws_ok(
   $$ select public.delete_signalisation('11111111-1111-1111-1111-111111111111') $$,
@@ -30,8 +34,12 @@ select set_config('request.jwt.claims',
   '{"role":"authenticated","sub":"00000000-0000-0000-0000-00000000000a","is_anonymous":false}', true);
 select is((select count(*) from public.my_signalisations())::int, 2, 'Julie retrouve ses signalements');
 select isnt(
-  (select resolved_at from public.resolve_signalisation('11111111-1111-1111-1111-111111111111')),
-  null, 'l’autrice marque son signalement résolu'
+  (select resolved_at from public.report_signalisation_gone('11111111-1111-1111-1111-111111111111')),
+  null, '« Plus là » de l’autrice : résolu tout de suite'
+);
+select is(
+  (select gone_votes from public.signalisations where id = '11111111-1111-1111-1111-111111111111'),
+  1, 'le « Plus là » de l’autrice n’ajoute pas de vote'
 );
 select lives_ok(
   $$ select public.delete_signalisation('22222222-2222-2222-2222-222222222222') $$,

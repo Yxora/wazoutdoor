@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Account } from '../domain/account'
-import { addComment, confirmSignalisation, createSignalisation, markResolved, reportGone, type Signalisation } from '../domain/signalisation'
+import { addComment, confirmSignalisation, createSignalisation, reportGone, type Signalisation } from '../domain/signalisation'
 import {
   checkNearbySignalisations,
   commentSignalisation,
   confirmSignalisationStillThere,
   deleteOwnSignalisation,
   listMySignalisations,
-  resolveOwnSignalisation,
   listMyGoneVotes,
   reportSignalisationGone,
 } from './maintainSignalisation'
@@ -38,10 +37,6 @@ function fakeStore(initial: Signalisation[]): SignalisationStore & { calls: stri
     mySignalisations: async () => {
       calls.push('mySignalisations')
       return [existing.id]
-    },
-    resolve: async (id) => {
-      calls.push('resolve')
-      return markResolved(find(id))
     },
     remove: async () => {
       calls.push('remove')
@@ -113,11 +108,6 @@ describe('retrait par l’auteur·rice', () => {
     expect(store.calls).toEqual([])
   })
 
-  it('marque son signalement résolu', async () => {
-    const resolved = await resolveOwnSignalisation(signedIn, fakeStore([existing]), existing.id)
-    expect(resolved.resolvedAt).toBeInstanceOf(Date)
-  })
-
   it('supprime la photo avant le signalement', async () => {
     const order: string[] = []
     const store = fakeStore([existing])
@@ -136,7 +126,6 @@ describe('retrait par l’auteur·rice', () => {
 
   it('sans compte, rien n’est retiré', async () => {
     const store = fakeStore([existing])
-    await expect(resolveOwnSignalisation(signedOut, store, existing.id)).rejects.toMatchObject({ code: 'not_signed_in' })
     await expect(deleteOwnSignalisation(signedOut, store, { upload: async () => '', remove: async () => {} }, existing)).rejects.toMatchObject({ code: 'not_signed_in' })
     expect(store.calls).toEqual([])
   })
