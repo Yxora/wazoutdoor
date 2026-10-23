@@ -15,6 +15,7 @@ import type { AuthGateway, PhotoStore, SignalisationStore, UserStore } from './a
 import { reportSignalisation } from './application/reportSignalisation'
 import { finishSignIn, sendSignInLink, verifyCode } from './application/signIn'
 import { currentUser, loadCurrentUser } from './application/currentUser'
+import { deleteAccount } from './application/deleteAccount'
 import { signOut } from './application/signOut'
 import { updateUser } from './application/updateUser'
 import { PROFILES } from './domain/profile'
@@ -215,7 +216,11 @@ async function main() {
       updateUser(auth, userStore, changes)
       applyUser(user())
     })
-    panel.replaceChildren(profile, createAccountBar(account.email, () => signOut(auth, userStore)))
+    panel.replaceChildren(profile, createAccountBar(
+        account.email,
+        () => signOut(auth, userStore),
+        () => deleteAccount(auth, userStore),
+      ))
   }
   renderPanel()
 

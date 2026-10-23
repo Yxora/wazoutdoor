@@ -789,3 +789,16 @@
 .account-bar p {
   margin: 0;
 }
+
+/* Action rare et destructive : discrète, en rouge, sous la déconnexion */
+#panel .account-bar__delete {
+  justify-self: start;
+  min-height: var(--od-size-touch);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--od-status-closed);
+  font: var(--od-caption);
+  text-decoration: underline;
+  cursor: pointer;
+}

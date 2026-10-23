@@ -203,3 +203,45 @@ describe('SupabaseAuth : session et jeton', () => {
     expect((await create({}, storage).auth).current()).toBeNull()
   })
 })
+
+describe('SupabaseAuth.deleteAccount', () => {
+  it('appelle la fonction delete-account avec le jeton, puis efface la session', async () => {
+    const { auth: pending, calls } = create({
+      '/verify': () => respond(200, session()),
+      '/functions/v1/delete-account': () => respond(200, { deleted: true }),
+      '/logout': () => new Response(null, { status: 204 }),
+    })
+    const auth = await pending
+    await auth.verifyCode('julie@exemple.fr', '123456')
+    await auth.deleteAccount()
+
+    expect(calls.some((c) => c.url === 'https://projet.supabase.co/functions/v1/delete-account')).toBe(true)
+    expect(auth.current()).toBeNull()
+  })
+
+  it('refus du serveur : le compte reste connecté', async () => {
+    const { auth: pending } = create({
+      '/verify': () => respond(200, session()),
+      '/functions/v1/delete-account': () => respond(502, { error: 'deletion failed' }),
+    })
+    const auth = await pending
+    await auth.verifyCode('julie@exemple.fr', '123456')
+    await expect(auth.deleteAccount()).rejects.toThrow('Suppression impossible')
+    expect(auth.current()).not.toBeNull()
+  })
+
+  it('sans réseau : erreur network, le compte reste connecté', async () => {
+    const { auth: pending } = create({ '/verify': () => respond(200, session()) })
+    const auth = await pending
+    await auth.verifyCode('julie@exemple.fr', '123456')
+    await expect(auth.deleteAccount()).rejects.toMatchObject({ code: 'network' })
+    expect(auth.current()).not.toBeNull()
+  })
+
+  it('sans session : not_signed_in, aucun appel', async () => {
+    const { auth: pending, calls } = create({})
+    const auth = await pending
+    await expect(auth.deleteAccount()).rejects.toMatchObject({ code: 'not_signed_in' })
+    expect(calls).toEqual([])
+  })
+})
