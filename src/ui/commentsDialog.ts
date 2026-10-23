@@ -1,5 +1,5 @@
 import { MAX_COMMENT_LENGTH, MAX_COMMENTS, SIGNALISATION_TYPE_LABEL, type Signalisation } from '../domain/signalisation'
-import { CLOSE_ICON_PATH, odIcon } from './signalisationIcons'
+import { openDialog } from './dialog'
 import { showToast } from './toast'
 
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = ''): HTMLElementTagNameMap[K] {
@@ -20,49 +20,11 @@ export function openCommentsDialog(
 ): void {
   let current = initial
 
-  const overlay = node('div', 'comments-dialog')
-  const box = node('div', 'comments-dialog__box')
-  box.setAttribute('role', 'dialog')
-  box.setAttribute('aria-modal', 'true')
-  box.setAttribute('aria-label', `Conversation : ${SIGNALISATION_TYPE_LABEL[initial.type]}`)
-
-  // Le focus qu'avait l'appelant (bouton de la popup) : on le lui rend à la fermeture
-  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
-
-  const close = () => {
-    document.removeEventListener('keydown', onKeydown)
-    overlay.remove()
-    if (opener?.isConnected) opener.focus()
-  }
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') return close()
-    if (event.key !== 'Tab') return
-    // Le focus reste dans la fenêtre : Tab ne repart pas derrière, sur la carte
-    const focusable = [...box.querySelectorAll<HTMLElement>('button, textarea')].filter((el) => !el.hidden && !(el as HTMLButtonElement).disabled)
-    if (focusable.length === 0) return
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    if (!box.contains(document.activeElement)) {
-      event.preventDefault()
-      first.focus()
-    } else if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault()
-      last.focus()
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault()
-      first.focus()
-    }
-  }
-
-  const closeButton = node('button', 'od-sheet__close')
-  closeButton.type = 'button'
-  closeButton.setAttribute('aria-label', 'Fermer')
-  const closeIcon = odIcon(CLOSE_ICON_PATH, 18)
-  closeIcon.setAttribute('class', 'od-sheet__close-icon')
-  closeButton.append(closeIcon)
-  closeButton.addEventListener('click', close)
-  const header = node('div', 'comments-dialog__header')
-  header.append(node('h2', 'od-sheet__title', SIGNALISATION_TYPE_LABEL[initial.type]), closeButton)
+  const { box } = openDialog({
+    title: SIGNALISATION_TYPE_LABEL[initial.type],
+    label: `Conversation : ${SIGNALISATION_TYPE_LABEL[initial.type]}`,
+    className: 'comments-dialog__box',
+  })
 
   const list = node('ul', 'comments-dialog__list')
   const empty = node('p', 'comments-dialog__empty', 'Aucun commentaire pour l’instant.')
@@ -113,13 +75,7 @@ export function openCommentsDialog(
     submit.disabled = false
   })
 
-  box.append(header, empty, list, form)
-  overlay.append(box)
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) close()
-  })
-  document.addEventListener('keydown', onKeydown)
-  document.body.append(overlay)
+  box.append(empty, list, form)
   render()
   // Après le clic qui ouvre la fenêtre, Leaflet touche encore à la popup : on attend la fin de l'événement pour prendre le focus
   setTimeout(() => field.focus(), 0)

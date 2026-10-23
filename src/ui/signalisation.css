@@ -3,6 +3,8 @@
 .od-button:focus-visible,
 .od-tile:focus-visible,
 .od-textarea:focus-visible,
+.od-input:focus-visible,
+.signin__link:focus-visible,
 .od-sheet__close:focus-visible {
   outline: none;
   box-shadow: var(--od-focus-ring);
@@ -114,6 +116,19 @@
   box-sizing: border-box;
   resize: vertical;
   font-family: var(--od-font-text);
+}
+
+.od-input {
+  font: var(--od-body);
+  font-family: var(--od-font-text);
+  color: var(--od-ink);
+  background: var(--od-surface-raised);
+  border: 1px solid var(--od-line);
+  border-radius: var(--od-radius-md);
+  padding: 0 var(--od-space-3);
+  min-height: var(--od-size-touch);
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .od-grid {
@@ -537,8 +552,8 @@
   padding-left: var(--od-space-4);
 }
 
-/* Conversation d'un signalement : fenêtre par-dessus la carte */
-.comments-dialog {
+/* Fenêtre par-dessus la carte (ui/dialog.ts) : conversation, invitation à se connecter */
+.od-dialog {
   position: fixed;
   inset: 0;
   z-index: 1100;
@@ -548,23 +563,30 @@
   background: rgb(0 0 0 / 0.5);
 }
 
-.comments-dialog__box {
+.od-dialog__box {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  align-content: start;
   gap: var(--od-space-3);
   width: min(100%, 460px);
   max-height: 85dvh;
   padding: var(--od-space-4);
+  overflow-y: auto;
   border-radius: 12px;
   background: var(--od-surface-raised);
   color: var(--od-ink);
 }
 
-.comments-dialog__header {
+.od-dialog__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--od-space-2);
+}
+
+/* Conversation : la liste défile, le champ reste visible */
+.comments-dialog__box {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow-y: visible;
 }
 
 .comments-dialog__list {
@@ -651,4 +673,80 @@
 .od-popup__talk {
   flex-basis: 100%;
   justify-content: center;
+}
+
+/* Connexion par email : l'email, puis le code à 6 chiffres */
+.signin__step {
+  display: grid;
+  gap: var(--od-space-3);
+}
+
+.signin__text {
+  margin: 0;
+  font: var(--od-body);
+  color: var(--od-ink);
+}
+
+.signin__code {
+  font: var(--od-title-2);
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.signin__link {
+  justify-self: center;
+  min-height: var(--od-size-touch);
+  padding: 0 var(--od-space-2);
+  font: var(--od-caption);
+  color: var(--od-brand);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  border-radius: var(--od-radius-md);
+  cursor: pointer;
+}
+
+.signin [hidden] {
+  display: none;
+}
+
+/* Dans le panneau Personnaliser, les règles `#panel button` passent avant les classes od-* */
+#panel .od-button--primary {
+  background: var(--od-brand);
+  border-color: var(--od-brand);
+  color: var(--od-ink-inverse);
+}
+
+#panel .od-button--primary:disabled {
+  opacity: 0.6;
+}
+
+#panel .signin__link {
+  padding: 0 var(--od-space-2);
+  font: var(--od-caption);
+  color: var(--od-brand);
+  background: none;
+  border: none;
+}
+
+.account-panel {
+  display: grid;
+  gap: var(--od-space-3);
+}
+
+.account-panel h2,
+.account-panel p {
+  margin: 0;
+}
+
+.account-bar {
+  display: grid;
+  gap: var(--od-space-2);
+  margin-top: var(--od-space-6);
+  padding-top: var(--od-space-4);
+  border-top: 1px solid var(--od-line);
+}
+
+.account-bar p {
+  margin: 0;
 }

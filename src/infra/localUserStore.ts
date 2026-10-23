@@ -6,17 +6,20 @@ import { DEMO_USER, type User } from '../domain/user'
 const STORAGE_KEY = 'wazoutdoor:user:v2'
 const MODES = ['ignore', 'impact', 'veto']
 
-/** Garde l'utilisateur fictif dans le navigateur ; toute donnée absente ou invalide retombe sur la démo. */
+/** Garde les préférences dans le navigateur ; toute donnée absente ou invalide retombe sur `fallback` (la démo par défaut). */
 export class LocalUserStore implements UserStore {
-  constructor(private readonly storage: Storage = localStorage) {}
+  constructor(
+    private readonly storage: Storage = localStorage,
+    private readonly fallback: User = DEMO_USER,
+  ) {}
 
   get(): User {
     try {
       const raw = this.storage.getItem(STORAGE_KEY)
-      if (!raw) return DEMO_USER
+      if (!raw) return this.fallback
       const stored = JSON.parse(raw) as Partial<User>
       const activities = (stored.activities ?? []).filter((id): id is ProfileId => id in PROFILES)
-      if (activities.length === 0) return DEMO_USER
+      if (activities.length === 0) return this.fallback
       const preferences = { ...DEFAULT_PREFERENCES }
       for (const id of Object.keys(preferences) as (keyof CriterionPreferences)[]) {
         const mode = stored.preferences?.[id]
@@ -27,9 +30,9 @@ export class LocalUserStore implements UserStore {
         const mode = stored.signalisationPreferences?.[type]
         if (mode && MODES.includes(mode)) signalisationPreferences[type] = mode
       }
-      return { ...DEMO_USER, activities, preferences, signalisationPreferences }
+      return { ...this.fallback, activities, preferences, signalisationPreferences }
     } catch {
-      return DEMO_USER
+      return this.fallback
     }
   }
 

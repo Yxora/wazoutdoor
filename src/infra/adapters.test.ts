@@ -6,7 +6,15 @@ import { NasaFirmsFireRisk } from './nasaFirmsFireRisk'
 import { OpenMeteoDaylight } from './openMeteoDaylight'
 import { OpenMeteoForecast } from './openMeteoForecast'
 import { RefugesInfoPlaces } from './refugesInfoPlaces'
+import { LocalSignalisationStore } from './localSignalisationStore'
+import { SupabasePhotoStore } from './supabasePhotoStore'
 import { SupabaseSignalisationStore } from './supabaseSignalisationStore'
+import { AuthError } from '../application/authError'
+import type { Signalisation } from '../domain/signalisation'
+
+/** Faux comptes : les tests de `infra/` n'ont besoin que de `current` et `accessToken` */
+const signedIn = { current: () => ({ id: 'u1', email: 'julie@exemple.fr' }), accessToken: async () => 'jeton-julie' }
+const signedOut = { current: () => null, accessToken: async () => null }
 
 function stubFetch(routes: Record<string, unknown>, status = 200) {
   const calls: { url: string; headers?: HeadersInit }[] = []
@@ -285,8 +293,9 @@ describe('SupabaseSignalisationStore', () => {
     lng: 7.02,
     created_at: '2026-10-10T08:30:00.000Z',
   }
+  const signalisation: Signalisation = { id: 'a1', type: 'arbre', description: '', position: { lat: 48, lng: 7 }, createdAt: new Date() }
 
-  it('envoie le signalement au format de la table, avec la clé publique', async () => {
+  it('envoie le signalement au format de la table, avec le jeton du compte', async () => {
     const calls: { url: string; init?: RequestInit }[] = []
     vi.stubGlobal(
       'fetch',
@@ -296,7 +305,7 @@ describe('SupabaseSignalisationStore', () => {
       }),
     )
 
-    const store = new SupabaseSignalisationStore('https://example.supabase.co/', 'anon-key')
+    const store = new SupabaseSignalisationStore('https://example.supabase.co/', 'anon-key', signedIn)
     await store.save({
       id: 'a1',
       type: 'arbre',
@@ -307,24 +316,49 @@ describe('SupabaseSignalisationStore', () => {
 
     expect(calls[0].url).toBe('https://example.supabase.co/rest/v1/signalisations')
     expect(calls[0].init?.method).toBe('POST')
-    expect(calls[0].init?.headers).toMatchObject({ apikey: 'anon-key', Authorization: 'Bearer anon-key' })
+    expect(calls[0].init?.headers).toMatchObject({ apikey: 'anon-key', Authorization: 'Bearer jeton-julie' })
     expect(JSON.parse(calls[0].init?.body as string)).toEqual(row)
   })
 
   it('signale un échec HTTP à la sauvegarde', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(null, { status: 401 })),
+      vi.fn(async () => new Response(null, { status: 500 })),
     )
-    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key')
-    await expect(
-      store.save({ id: 'a1', type: 'arbre', description: '', position: { lat: 48, lng: 7 }, createdAt: new Date() }),
-    ).rejects.toThrow(/HTTP 401/)
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    await expect(store.save(signalisation)).rejects.toThrow(/HTTP 500/)
   })
 
-  it('relit les signalements et reconstruit la position et la date', async () => {
+  it('sans session, n’envoie rien et demande de se connecter', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedOut)
+    await expect(store.save(signalisation)).rejects.toMatchObject({ code: 'not_signed_in' })
+    await expect(store.reportGone('a1')).rejects.toMatchObject({ code: 'not_signed_in' })
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it.each([401, 403])('traduit un refus du jeton (HTTP %i) en demande de connexion', async (status) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status })),
+    )
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    await expect(store.save(signalisation)).rejects.toBeInstanceOf(AuthError)
+    await expect(store.addComment('a1', 'Toujours là')).rejects.toMatchObject({ code: 'not_signed_in' })
+  })
+
+  it('appelle les fonctions du cycle de vie avec le jeton du compte', async () => {
+    const calls = stubFetch({ 'rpc/confirm_signalisation': [row] })
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    await store.confirm('a1')
+    expect(calls[0].url).toBe('https://example.supabase.co/rest/v1/rpc/confirm_signalisation')
+    expect(calls[0].headers).toMatchObject({ Authorization: 'Bearer jeton-julie' })
+  })
+
+  it('relit les signalements avec la clé publique, même sans compte', async () => {
     const calls = stubFetch({ 'rest/v1/signalisations': [row] })
-    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key')
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedOut)
     const result = await store.list()
 
     expect(result).toEqual([
@@ -337,6 +371,91 @@ describe('SupabaseSignalisationStore', () => {
       },
     ])
     expect(calls[0].url).toContain('order=created_at.desc')
+    expect(calls[0].headers).toMatchObject({ Authorization: 'Bearer anon-key' })
+  })
+})
+
+describe('SupabaseSignalisationStore : votes « Plus là »', () => {
+  it('traduit already_voted en message lisible', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ code: 'P0001', message: 'already_voted' }), { status: 400 })),
+    )
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    await expect(store.reportGone('a1')).rejects.toThrow('Vous avez déjà dit qu’il n’y est plus.')
+  })
+
+  it('lit les votes du compte avec son jeton', async () => {
+    const calls = stubFetch({ 'rpc/my_gone_votes': [{ signalisation_id: 'a1' }, { signalisation_id: 'b2' }] })
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    expect(await store.myGoneVotes()).toEqual(['a1', 'b2'])
+    expect(calls[0].headers).toMatchObject({ Authorization: 'Bearer jeton-julie' })
+  })
+
+  it('sans session, aucun vote et aucun appel', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedOut)
+    expect(await store.myGoneVotes()).toEqual([])
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('LocalSignalisationStore : votes « Plus là »', () => {
+  function memoryStorage() {
+    const data = new Map<string, string>()
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v), removeItem: (k: string) => void data.delete(k) }
+  }
+  const tree: Signalisation = { id: 'a1', type: 'arbre', description: '', position: { lat: 48, lng: 7 }, createdAt: new Date() }
+
+  it('refuse un second vote, puis l’accepte après « Toujours là »', async () => {
+    vi.stubGlobal('localStorage', memoryStorage())
+    const store = new LocalSignalisationStore()
+    await store.save(tree)
+
+    expect((await store.reportGone('a1')).goneVotes).toBe(1)
+    expect(await store.myGoneVotes()).toEqual(['a1'])
+    await expect(store.reportGone('a1')).rejects.toThrow('Vous avez déjà dit qu’il n’y est plus.')
+
+    await store.confirm('a1')
+    expect(await store.myGoneVotes()).toEqual([])
+    expect((await store.reportGone('a1')).goneVotes).toBe(1)
+  })
+})
+
+describe('SupabasePhotoStore', () => {
+  it('dépose la photo dans le dossier du compte, avec son jeton', async () => {
+    const calls: { url: string; init?: RequestInit }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        return url.startsWith('data:') ? new Response(new Blob(['jpeg'])) : new Response('{}', { status: 200 })
+      }),
+    )
+    const store = new SupabasePhotoStore('https://example.supabase.co', 'anon-key', signedIn)
+    const url = await store.upload('a1', 'data:image/jpeg;base64,AAAA')
+
+    expect(calls[1].url).toBe('https://example.supabase.co/storage/v1/object/signalisation-photos/u1/a1.jpg')
+    expect(calls[1].init?.headers).toMatchObject({ apikey: 'anon-key', Authorization: 'Bearer jeton-julie' })
+    expect(url).toBe('https://example.supabase.co/storage/v1/object/public/signalisation-photos/u1/a1.jpg')
+  })
+
+  it('sans session, n’envoie rien et demande de se connecter', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    const store = new SupabasePhotoStore('https://example.supabase.co', 'anon-key', signedOut)
+    await expect(store.upload('a1', 'data:image/jpeg;base64,AAAA')).rejects.toMatchObject({ code: 'not_signed_in' })
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('traduit un refus de la policy (HTTP 403) en demande de connexion', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => (url.startsWith('data:') ? new Response(new Blob(['jpeg'])) : new Response('{}', { status: 403 }))),
+    )
+    const store = new SupabasePhotoStore('https://example.supabase.co', 'anon-key', signedIn)
+    await expect(store.upload('a1', 'data:image/jpeg;base64,AAAA')).rejects.toMatchObject({ code: 'not_signed_in' })
   })
 })
 

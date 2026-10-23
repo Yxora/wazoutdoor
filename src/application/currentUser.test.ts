@@ -15,8 +15,8 @@ describe('currentUser', () => {
     expect(user.activities).toEqual(['randonneur', 'traileur', 'vttiste'])
   })
 
-  it('avec compte : les préférences enregistrées', () => {
+  it('avec compte : les préférences enregistrées, sous l’email du compte', () => {
     const account: Account = { id: 'u1', email: 'julie@exemple.fr' }
-    expect(currentUser({ current: () => account }, store)).toBe(DEMO_USER)
+    expect(currentUser({ current: () => account }, store)).toEqual({ ...DEMO_USER, name: 'julie@exemple.fr' })
   })
 })

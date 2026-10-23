@@ -10,6 +10,7 @@ import { isDisplayablePhoto } from './photo'
 import { openPhotoViewer } from './photoViewer'
 import { CHECK_ICON_PATH, CLOSE_ICON_PATH, odIcon, WARNING_ICON_PATH } from './signalisationIcons'
 import { openCommentsDialog } from './commentsDialog'
+import { openDialog } from './dialog'
 import { showToast } from './toast'
 import logoUrl from './assets/logo.png'
 
@@ -282,36 +283,27 @@ function relativeTimeLabel(date: Date): string {
 /** Au-delà, la popup ne montre plus les commentaires : un bouton ouvre la conversation */
 const MAX_INLINE_COMMENTS = 3
 
-const GONE_VOTED_KEY = 'wazoutdoor:gone-voted'
-
-/** Un appareil ne vote « plus là » qu'une fois par signalement (garde-fou léger : pas de compte dans le prototype) */
-function hasVotedGone(id: string): boolean {
-  try {
-    return (JSON.parse(localStorage.getItem(GONE_VOTED_KEY) ?? '[]') as string[]).includes(id)
-  } catch {
-    return false
-  }
-}
-
-function rememberGoneVote(id: string): void {
-  try {
-    const voted = JSON.parse(localStorage.getItem(GONE_VOTED_KEY) ?? '[]') as string[]
-    localStorage.setItem(GONE_VOTED_KEY, JSON.stringify([...voted, id]))
-  } catch {
-    // Sans stockage local, le garde-fou ne joue pas : le vote compte quand même
-  }
-}
-
 /** Actions de cycle de vie, fournies par l'application ; chacune renvoie le signalement à jour */
 export interface SignalisationActions {
   confirm(signalisation: Signalisation): Promise<Signalisation>
   reportGone(signalisation: Signalisation): Promise<Signalisation>
   comment(signalisation: Signalisation, text: string): Promise<Signalisation>
+  /** Formulaire de connexion, montré à qui veut confirmer, voter ou commenter sans compte */
+  createSignInForm(): HTMLElement
+}
+
+/** Ce que la popup doit savoir du compte : connecté·e ou non, et ses votes « Plus là » */
+interface AccountState {
+  signedIn: boolean
+  votedGone(id: string): boolean
+  rememberGoneVote(id: string): void
+  askSignIn(): void
 }
 
 function lifecycleButtons(
   signalisation: Signalisation,
   actions: SignalisationActions,
+  account: AccountState,
   onChanged: (updated: Signalisation) => void,
 ): HTMLElement {
   const row = document.createElement('div')
@@ -330,6 +322,7 @@ function lifecycleButtons(
     text.textContent = label
     button.append(glyph, text)
     button.addEventListener('click', async () => {
+      if (!account.signedIn) return account.askSignIn()
       row.querySelectorAll('button').forEach((b) => (b.disabled = true))
       try {
         const updated = await run()
@@ -351,7 +344,7 @@ function lifecycleButtons(
     CLOSE_ICON_PATH,
     async () => {
       const updated = await actions.reportGone(signalisation)
-      rememberGoneVote(signalisation.id)
+      account.rememberGoneVote(signalisation.id)
       return updated
     },
     'Merci. Il disparaît quand deux personnes disent qu’il n’y est plus.',
@@ -363,7 +356,7 @@ function lifecycleButtons(
   question.textContent = 'Toujours là ?'
   votes.append(still, gone)
   row.append(question, votes)
-  if (hasVotedGone(signalisation.id)) {
+  if (account.signedIn && account.votedGone(signalisation.id)) {
     gone.disabled = true
     gone.setAttribute('aria-label', 'Plus là (vote enregistré)')
     gone.title = 'Vote enregistré'
@@ -373,7 +366,10 @@ function lifecycleButtons(
   talk.type = 'button'
   talk.className = 'od-button od-button--secondary od-popup__action od-popup__talk'
   talk.textContent = total > MAX_INLINE_COMMENTS ? `Voir la conversation (${total})` : 'Ajouter un commentaire'
-  talk.addEventListener('click', () => openCommentsDialog(signalisation, actions.comment, onChanged))
+  talk.addEventListener('click', () => {
+    if (!account.signedIn) return account.askSignIn()
+    openCommentsDialog(signalisation, actions.comment, onChanged)
+  })
   row.append(talk, message)
   return row
 }
@@ -381,8 +377,7 @@ function lifecycleButtons(
 function signalisationPopup(
   signalisation: Signalisation,
   toConfirm: boolean,
-  actions?: SignalisationActions,
-  onChanged: (updated: Signalisation) => void = () => {},
+  lifecycle?: { actions: SignalisationActions; account: AccountState; onChanged: (updated: Signalisation) => void },
 ): HTMLElement {
   const box = document.createElement('div')
   box.className = 'od-popup'
@@ -416,7 +411,7 @@ function signalisationPopup(
     }
     box.append(list)
   }
-  if (actions) box.append(lifecycleButtons(signalisation, actions, onChanged))
+  if (lifecycle) box.append(lifecycleButtons(signalisation, lifecycle.actions, lifecycle.account, lifecycle.onChanged))
   return box
 }
 
@@ -429,6 +424,20 @@ export interface SignalisationLayer {
   focus(signalisation: Signalisation, options?: { openPopup?: boolean }): void
   /** Types réglés sur « Red flag » par l'utilisateur·rice : leurs points émettent une onde rouge */
   setRedFlags(types: ReadonlySet<SignalisationType>): void
+  /** Connexion ou déconnexion : boutons de la popup et votes « Plus là » du compte ; ferme l'invitation à se connecter */
+  setAccount(signedIn: boolean, goneVotes: ReadonlySet<string>): void
+}
+
+/** Sans compte, confirmer, voter ou commenter ouvre cette invitation à se connecter */
+function openSignInInvite(form: HTMLElement, onClose: () => void): () => void {
+  const { box, close } = openDialog({ title: 'Connectez-vous', label: 'Se connecter pour participer', onClose })
+  const text = document.createElement('p')
+  text.className = 'signin__text'
+  text.textContent = 'Un compte suffit pour confirmer un signalement, dire qu’il n’y est plus ou le commenter.'
+  box.append(text, form)
+  // Après le clic qui ouvre la fenêtre, Leaflet touche encore à la popup : on attend la fin de l'événement
+  setTimeout(() => box.querySelector<HTMLInputElement>('input')?.focus(), 0)
+  return close
 }
 
 // Deux pastilles plus proches que cela (en pixels) se chevauchent : on les écarte
@@ -471,6 +480,24 @@ export function createSignalisationLayer(map: L.Map, actions?: SignalisationActi
   const layer = L.layerGroup().addTo(map)
   let signalisations: Signalisation[] = []
   let redFlags: ReadonlySet<SignalisationType> = new Set()
+  let signedIn = false
+  // Votes « Plus là » du compte : lus sur le serveur, complétés tout de suite après un vote
+  let goneVotes = new Set<string>()
+  let closeInvite: (() => void) | null = null
+  // Signalement dont la fenêtre est ouverte : on la rouvre quand le compte change
+  let openId: string | null = null
+
+  const account: AccountState = {
+    get signedIn() {
+      return signedIn
+    },
+    votedGone: (id) => goneVotes.has(id),
+    rememberGoneVote: (id) => void goneVotes.add(id),
+    askSignIn: () => {
+      if (!actions || closeInvite) return
+      closeInvite = openSignInInvite(actions.createSignInForm(), () => (closeInvite = null))
+    },
+  }
 
   const markerFor = (signalisation: Signalisation, position: L.LatLng) => {
     const label = SIGNALISATION_TYPE_LABEL[signalisation.type]
@@ -479,7 +506,12 @@ export function createSignalisationLayer(map: L.Map, actions?: SignalisationActi
       icon: dangerPinIcon(signalisation, redFlags.has(signalisation.type), toConfirm),
       title: label,
       alt: label,
-    }).bindPopup(signalisationPopup(signalisation, toConfirm, actions, (updated) => api.replace(updated)))
+    })
+      .bindPopup(signalisationPopup(signalisation, toConfirm, actions && { actions, account, onChanged: (updated) => api.replace(updated) }))
+      .on('popupopen', () => (openId = signalisation.id))
+      .on('popupclose', () => {
+        if (openId === signalisation.id) openId = null
+      })
   }
 
   const markers = new Map<string, L.Marker>()
@@ -519,6 +551,15 @@ export function createSignalisationLayer(map: L.Map, actions?: SignalisationActi
     setRedFlags(types) {
       redFlags = types
       render()
+    },
+    setAccount(nextSignedIn, nextGoneVotes) {
+      signedIn = nextSignedIn
+      goneVotes = new Set(nextGoneVotes)
+      if (signedIn) closeInvite?.()
+      // Le rendu ferme la fenêtre ouverte : on la rouvre, à jour
+      const reopen = openId
+      render()
+      if (reopen) markers.get(reopen)?.openPopup()
     },
   }
   return api

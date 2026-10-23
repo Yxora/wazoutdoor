@@ -47,3 +47,22 @@ describe.skipIf(!process.env.RUN_LIVE)('chaîne complète sur des données réel
     expect(known.length).toBeGreaterThanOrEqual(3)
   }, 60_000)
 })
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY
+
+describe.skipIf(!process.env.RUN_LIVE || !supabaseUrl || !supabaseAnonKey)('Supabase : écritures réservées aux comptes', () => {
+  it('refuse un signalement envoyé avec la seule clé anon', async () => {
+    const response = await fetch(`${supabaseUrl}/rest/v1/signalisations`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey!,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({ type: 'autre', description: 'test live : doit être refusé', lat: 48, lng: 7 }),
+    })
+    expect([401, 403]).toContain(response.status)
+  })
+})

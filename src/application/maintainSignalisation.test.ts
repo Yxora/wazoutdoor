@@ -5,6 +5,7 @@ import {
   checkNearbySignalisations,
   commentSignalisation,
   confirmSignalisationStillThere,
+  listMyGoneVotes,
   reportSignalisationGone,
 } from './maintainSignalisation'
 import type { SignalisationStore } from './ports'
@@ -26,6 +27,10 @@ function fakeStore(initial: Signalisation[]): SignalisationStore & { calls: stri
     addComment: async (id, text) => {
       calls.push('addComment')
       return addComment(find(id), text)
+    },
+    myGoneVotes: async () => {
+      calls.push('myGoneVotes')
+      return [existing.id]
     },
     list: async () => initial,
   }
@@ -69,6 +74,19 @@ describe('sans compte', () => {
     await expect(confirmSignalisationStillThere(signedOut, store, existing.id)).rejects.toMatchObject({ code: 'not_signed_in' })
     await expect(reportSignalisationGone(signedOut, store, existing.id)).rejects.toMatchObject({ code: 'not_signed_in' })
     await expect(commentSignalisation(signedOut, store, existing.id, 'Encore là')).rejects.toMatchObject({ code: 'not_signed_in' })
+    expect(store.calls).toEqual([])
+  })
+})
+
+describe('listMyGoneVotes', () => {
+  it('renvoie les votes « Plus là » du compte', async () => {
+    const store = fakeStore([existing])
+    expect(await listMyGoneVotes(signedIn, store)).toEqual(new Set([existing.id]))
+  })
+
+  it('sans compte, ne demande rien au store', async () => {
+    const store = fakeStore([existing])
+    expect(await listMyGoneVotes(signedOut, store)).toEqual(new Set())
     expect(store.calls).toEqual([])
   })
 })
