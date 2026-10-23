@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Account } from '../domain/account'
-import { addComment, confirmSignalisation, createSignalisation, reportGone, type Signalisation } from '../domain/signalisation'
+import { addComment, confirmSignalisation, createSignalisation, markResolved, reportGone, type Signalisation } from '../domain/signalisation'
 import {
   checkNearbySignalisations,
   commentSignalisation,
   confirmSignalisationStillThere,
+  deleteOwnSignalisation,
+  listMySignalisations,
+  resolveOwnSignalisation,
   listMyGoneVotes,
   reportSignalisationGone,
 } from './maintainSignalisation'
@@ -31,6 +34,17 @@ function fakeStore(initial: Signalisation[]): SignalisationStore & { calls: stri
     myGoneVotes: async () => {
       calls.push('myGoneVotes')
       return [existing.id]
+    },
+    mySignalisations: async () => {
+      calls.push('mySignalisations')
+      return [existing.id]
+    },
+    resolve: async (id) => {
+      calls.push('resolve')
+      return markResolved(find(id))
+    },
+    remove: async () => {
+      calls.push('remove')
     },
     list: async () => initial,
   }
@@ -87,6 +101,43 @@ describe('listMyGoneVotes', () => {
   it('sans compte, ne demande rien au store', async () => {
     const store = fakeStore([existing])
     expect(await listMyGoneVotes(signedOut, store)).toEqual(new Set())
+    expect(store.calls).toEqual([])
+  })
+})
+
+describe('retrait par l’auteur·rice', () => {
+  it('liste ses signalements, vide sans compte', async () => {
+    expect(await listMySignalisations(signedIn, fakeStore([existing]))).toEqual(new Set([existing.id]))
+    const store = fakeStore([existing])
+    expect(await listMySignalisations(signedOut, store)).toEqual(new Set())
+    expect(store.calls).toEqual([])
+  })
+
+  it('marque son signalement résolu', async () => {
+    const resolved = await resolveOwnSignalisation(signedIn, fakeStore([existing]), existing.id)
+    expect(resolved.resolvedAt).toBeInstanceOf(Date)
+  })
+
+  it('supprime la photo avant le signalement', async () => {
+    const order: string[] = []
+    const store = fakeStore([existing])
+    const photos = { upload: async () => '', remove: async (url: string) => void order.push(`photo ${url}`) }
+    store.remove = async () => void order.push('signalement')
+    await deleteOwnSignalisation(signedIn, store, photos, { ...existing, photoUrl: 'https://photos/a.jpg' })
+    expect(order).toEqual(['photo https://photos/a.jpg', 'signalement'])
+  })
+
+  it('photo non effacée : le signalement reste', async () => {
+    const store = fakeStore([existing])
+    const photos = { upload: async () => '', remove: async () => Promise.reject(new Error('HTTP 500')) }
+    await expect(deleteOwnSignalisation(signedIn, store, photos, { ...existing, photoUrl: 'https://photos/a.jpg' })).rejects.toThrow('HTTP 500')
+    expect(store.calls).not.toContain('remove')
+  })
+
+  it('sans compte, rien n’est retiré', async () => {
+    const store = fakeStore([existing])
+    await expect(resolveOwnSignalisation(signedOut, store, existing.id)).rejects.toMatchObject({ code: 'not_signed_in' })
+    await expect(deleteOwnSignalisation(signedOut, store, { upload: async () => '', remove: async () => {} }, existing)).rejects.toMatchObject({ code: 'not_signed_in' })
     expect(store.calls).toEqual([])
   })
 })

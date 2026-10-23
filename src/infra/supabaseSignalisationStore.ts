@@ -1,6 +1,6 @@
 import { AuthError } from '../application/authError'
 import type { AuthGateway, SignalisationStore } from '../application/ports'
-import { ALREADY_VOTED_GONE, type Signalisation, type SignalisationType } from '../domain/signalisation'
+import { ALREADY_VOTED_GONE, NOT_OWNER, type Signalisation, type SignalisationType } from '../domain/signalisation'
 
 interface SignalisationRow {
   id: string
@@ -12,6 +12,7 @@ interface SignalisationRow {
   photo_url?: string | null
   gone_votes?: number | null
   comments?: string[] | null
+  resolved_at?: string | null
 }
 
 function toRow(signalisation: Signalisation): SignalisationRow {
@@ -37,6 +38,7 @@ function fromRow(row: SignalisationRow): Signalisation {
     ...(row.photo_url ? { photoUrl: row.photo_url } : {}),
     ...(row.gone_votes ? { goneVotes: row.gone_votes } : {}),
     ...(row.comments?.length ? { comments: row.comments } : {}),
+    ...(row.resolved_at ? { resolvedAt: new Date(row.resolved_at) } : {}),
   }
 }
 
@@ -51,13 +53,19 @@ export function rejectedAccount(response: Response): boolean {
   return response.status === 401 || response.status === 403
 }
 
-/** La fonction SQL lève `already_voted` quand le compte a déjà voté « plus là » sur ce signalement */
-async function alreadyVoted(response: Response): Promise<boolean> {
+/** Erreur levée par une fonction SQL (`already_voted`, `not_owner`) : PostgREST la renvoie en HTTP 400 */
+async function sqlError(response: Response): Promise<string | null> {
+  if (response.status !== 400) return null
   try {
-    return ((await response.clone().json()) as { message?: string }).message === 'already_voted'
+    return ((await response.clone().json()) as { message?: string }).message ?? null
   } catch {
-    return false
+    return null
   }
+}
+
+const SQL_ERROR_MESSAGE: Record<string, string> = {
+  already_voted: ALREADY_VOTED_GONE,
+  not_owner: NOT_OWNER,
 }
 
 /**
@@ -92,16 +100,23 @@ export class SupabaseSignalisationStore implements SignalisationStore {
     if (!response.ok) throw new Error(`Supabase : échec de l'enregistrement du signalement (HTTP ${response.status})`)
   }
 
-  /** Fonctions SQL (voir migration) : le compteur de « plus là » doit être incrémenté de façon atomique */
-  private async rpc(name: string, args: Record<string, string>): Promise<Signalisation> {
+  /** Appelle une fonction SQL avec le jeton du compte et traduit ses erreurs */
+  private async call(name: string, args: Record<string, string>): Promise<Response> {
     const response = await fetch(`${this.endpoint.replace('/signalisations', '')}/rpc/${name}`, {
       method: 'POST',
       headers: await this.writeHeaders(),
       body: JSON.stringify(args),
     })
     if (rejectedAccount(response)) throw new AuthError('not_signed_in')
-    if (response.status === 400 && (await alreadyVoted(response))) throw new Error(ALREADY_VOTED_GONE)
+    const known = SQL_ERROR_MESSAGE[(await sqlError(response)) ?? '']
+    if (known) throw new Error(known)
     if (!response.ok) throw new Error(`Supabase : échec de l'opération sur le signalement (HTTP ${response.status})`)
+    return response
+  }
+
+  /** Fonctions SQL (voir migrations) : le compteur de « plus là » doit être incrémenté de façon atomique */
+  private async rpc(name: string, args: Record<string, string>): Promise<Signalisation> {
+    const response = await this.call(name, args)
     const rows = (await response.json()) as SignalisationRow[] | SignalisationRow
     const row = Array.isArray(rows) ? rows[0] : rows
     if (!row) throw new Error('Signalement introuvable ou limite de commentaires atteinte')
@@ -120,16 +135,26 @@ export class SupabaseSignalisationStore implements SignalisationStore {
     return this.rpc('add_signalisation_comment', { p_id: id, p_comment: text })
   }
 
-  /** Sans session, aucun vote : on n'appelle pas le serveur */
-  async myGoneVotes(): Promise<string[]> {
+  myGoneVotes(): Promise<string[]> {
+    return this.ids('my_gone_votes')
+  }
+
+  mySignalisations(): Promise<string[]> {
+    return this.ids('my_signalisations')
+  }
+
+  resolve(id: string): Promise<Signalisation> {
+    return this.rpc('resolve_signalisation', { p_id: id })
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.call('delete_signalisation', { p_id: id })
+  }
+
+  /** Identifiants propres au compte ; sans session, aucun : on n'appelle pas le serveur */
+  private async ids(name: string): Promise<string[]> {
     if (!(await this.auth.accessToken())) return []
-    const response = await fetch(`${this.endpoint.replace('/signalisations', '')}/rpc/my_gone_votes`, {
-      method: 'POST',
-      headers: await this.writeHeaders(),
-      body: '{}',
-    })
-    if (rejectedAccount(response)) throw new AuthError('not_signed_in')
-    if (!response.ok) throw new Error(`Supabase : échec de la lecture des votes (HTTP ${response.status})`)
+    const response = await this.call(name, {})
     const rows = (await response.json()) as { signalisation_id: string }[]
     return rows.map((row) => row.signalisation_id)
   }

@@ -5,4 +5,7 @@ export class LocalPhotoStore implements PhotoStore {
   async upload(_id: string, dataUrl: string): Promise<string> {
     return dataUrl
   }
+
+  /** La photo est dans le signalement : elle part avec lui */
+  async remove(): Promise<void> {}
 }

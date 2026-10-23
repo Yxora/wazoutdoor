@@ -28,6 +28,8 @@ export interface Signalisation {
   goneVotes?: number
   /** Commentaires d'autres utilisateur·rices, du plus ancien au plus récent */
   comments?: string[]
+  /** Marqué résolu par son auteur·rice : il quitte la carte et le score, sans être effacé */
+  resolvedAt?: Date
 }
 
 export const SIGNALISATION_TYPE_LABEL: Record<SignalisationType, string> = {
@@ -132,8 +134,14 @@ export function isExpired(signalisation: Signalisation, now: Date): boolean {
   return ageMs(signalisation, now) > validityMs(signalisation.type)
 }
 
+/** Résolu par son auteur·rice, ou par assez de « plus là » */
 export function isResolved(signalisation: Signalisation): boolean {
-  return (signalisation.goneVotes ?? 0) >= GONE_VOTES_TO_RESOLVE
+  return signalisation.resolvedAt !== undefined || (signalisation.goneVotes ?? 0) >= GONE_VOTES_TO_RESOLVE
+}
+
+/** L'auteur·rice dit que le danger n'est plus là : résolu tout de suite, sans attendre les votes */
+export function markResolved(signalisation: Signalisation, now = new Date()): Signalisation {
+  return { ...signalisation, resolvedAt: now }
 }
 
 /** Quelqu'un a dit « plus là » mais pas encore assez de personnes pour le résoudre : à vérifier */
@@ -168,6 +176,9 @@ export function freshness(signalisation: Signalisation, now: Date): number {
 export function confirmSignalisation(signalisation: Signalisation, now = new Date()): Signalisation {
   return { ...signalisation, createdAt: now, goneVotes: 0 }
 }
+
+/** Seul·e l'auteur·rice d'un signalement peut le marquer résolu ou le supprimer */
+export const NOT_OWNER = 'Seule la personne qui l’a signalé peut le retirer.'
 
 /** Une personne ne vote « plus là » qu'une fois par signalement (jusqu'au prochain « toujours là ») */
 export const ALREADY_VOTED_GONE = 'Vous avez déjà dit qu’il n’y est plus.'

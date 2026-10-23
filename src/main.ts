@@ -4,7 +4,10 @@ import {
   commentSignalisation,
   checkNearbySignalisations,
   confirmSignalisationStillThere,
+  deleteOwnSignalisation,
   listMyGoneVotes,
+  listMySignalisations,
+  resolveOwnSignalisation,
   reportSignalisationGone,
 } from './application/maintainSignalisation'
 import { listActiveSignalisations } from './application/listSignalisations'
@@ -257,16 +260,22 @@ async function main() {
     confirm: (s) => confirmSignalisationStillThere(auth, signalisationStore, s.id),
     reportGone: (s) => reportSignalisationGone(auth, signalisationStore, s.id),
     comment: (s, text) => commentSignalisation(auth, signalisationStore, s.id, text),
+    resolve: (s) => resolveOwnSignalisation(auth, signalisationStore, s.id),
+    remove: (s) => deleteOwnSignalisation(auth, signalisationStore, photoStore, s),
     createSignInForm: newSignInForm,
   })
-  // Boutons de la popup selon le compte, et ses votes « Plus là » (bouton grisé)
+  // Boutons de la popup selon le compte, ses votes « Plus là » (bouton grisé) et ses signalements (poubelle)
   const refreshAccountOnMap = async () => {
     const signedIn = auth.current() !== null
-    signalisationLayer.setAccount(signedIn, new Set())
+    signalisationLayer.setAccount({ signedIn, goneVotes: new Set(), mine: new Set() })
     try {
-      signalisationLayer.setAccount(signedIn, await listMyGoneVotes(auth, signalisationStore))
+      const [goneVotes, mine] = await Promise.all([
+        listMyGoneVotes(auth, signalisationStore),
+        listMySignalisations(auth, signalisationStore),
+      ])
+      signalisationLayer.setAccount({ signedIn, goneVotes, mine })
     } catch (error) {
-      console.error(`Votes « Plus là » indisponibles : ${error instanceof Error ? error.message : error}`)
+      console.error(`Votes et signalements du compte indisponibles : ${error instanceof Error ? error.message : error}`)
     }
   }
   refreshAccountOnMap()
@@ -293,7 +302,7 @@ async function main() {
     createSignInForm: newSignInForm,
     onSubmit: async ({ position, type, description, photo }) => {
       const signalisation = await reportSignalisation(auth, signalisationStore, { position, type, description, photo }, photoStore)
-      signalisationLayer.add(signalisation)
+      signalisationLayer.add(signalisation, { mine: true })
       // Après l'envoi : retour sur la carte, centrée sur le nouveau signalement
       nav.showMap()
       signalisationLayer.focus(signalisation)

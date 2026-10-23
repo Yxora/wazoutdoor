@@ -77,6 +77,8 @@ export interface ProtectedAreaProvider {
 export interface PhotoStore {
   /** Enregistre la photo (data URL JPEG) et renvoie l'adresse à mettre dans le signalement */
   upload(id: string, dataUrl: string): Promise<string>
+  /** Efface la photo à cette adresse (déjà absente : rien à faire) */
+  remove(url: string): Promise<void>
 }
 
 export interface SignalisationStore {
@@ -87,6 +89,12 @@ export interface SignalisationStore {
   reportGone(id: string): Promise<Signalisation>
   /** Identifiants des signalements où la personne connectée a voté « plus là » */
   myGoneVotes(): Promise<string[]>
+  /** Identifiants des signalements créés par la personne connectée */
+  mySignalisations(): Promise<string[]>
+  /** L'auteur·rice le marque résolu : il quitte la carte, reste en base */
+  resolve(id: string): Promise<Signalisation>
+  /** L'auteur·rice le supprime, avec ses commentaires et ses votes */
+  remove(id: string): Promise<void>
   /** Ajoute un commentaire (vide ou limite atteinte : signalement inchangé) */
   addComment(id: string, text: string): Promise<Signalisation>
   list(): Promise<Signalisation[]>

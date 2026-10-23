@@ -423,7 +423,80 @@ describe('LocalSignalisationStore : votes « Plus là »', () => {
   })
 })
 
+describe('SupabaseSignalisationStore : retrait par l’auteur·rice', () => {
+  it('appelle delete_signalisation avec le jeton du compte', async () => {
+    const calls = stubFetch({ 'rpc/delete_signalisation': null })
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    await store.remove('a1')
+    expect(calls[0].url).toBe('https://example.supabase.co/rest/v1/rpc/delete_signalisation')
+    expect(calls[0].headers).toMatchObject({ Authorization: 'Bearer jeton-julie' })
+  })
+
+  it('traduit not_owner en message lisible', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ code: 'P0001', message: 'not_owner' }), { status: 400 })),
+    )
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    await expect(store.resolve('a1')).rejects.toThrow('Seule la personne qui l’a signalé peut le retirer.')
+  })
+
+  it('relit la date de résolution', async () => {
+    stubFetch({ 'rpc/resolve_signalisation': [{ id: 'a1', type: 'arbre', description: '', lat: 48, lng: 7, created_at: '2026-10-10T08:30:00.000Z', resolved_at: '2026-10-11T08:30:00.000Z' }] })
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    expect((await store.resolve('a1')).resolvedAt).toEqual(new Date('2026-10-11T08:30:00.000Z'))
+  })
+
+  it('liste les signalements du compte', async () => {
+    stubFetch({ 'rpc/my_signalisations': [{ signalisation_id: 'a1' }] })
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    expect(await store.mySignalisations()).toEqual(['a1'])
+  })
+})
+
+describe('LocalSignalisationStore : retrait par l’auteur·rice', () => {
+  function memoryStorage() {
+    const data = new Map<string, string>()
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v), removeItem: (k: string) => void data.delete(k) }
+  }
+  const tree: Signalisation = { id: 'a1', type: 'arbre', description: '', position: { lat: 48, lng: 7 }, createdAt: new Date() }
+
+  it('marque résolu ou supprime ses propres signalements seulement', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const store = new LocalSignalisationStore()
+    await store.save(tree)
+    expect(await store.mySignalisations()).toEqual(['a1'])
+
+    const resolved = await store.resolve('a1')
+    expect(resolved.resolvedAt).toBeInstanceOf(Date)
+    expect((await store.list())[0].resolvedAt).toBeInstanceOf(Date)
+
+    await store.remove('a1')
+    expect(await store.list()).toEqual([])
+
+    // Signalement d'un autre (pas créé dans ce navigateur)
+    storage.setItem('wazoutdoor:signalisations', JSON.stringify([{ ...tree, id: 'b2', createdAt: tree.createdAt.toISOString() }]))
+    await expect(store.remove('b2')).rejects.toThrow('Seule la personne qui l’a signalé peut le retirer.')
+  })
+})
+
 describe('SupabasePhotoStore', () => {
+  it('efface une photo du bucket avec le jeton du compte', async () => {
+    const calls = stubFetch({ 'signalisation-photos': {} })
+    const store = new SupabasePhotoStore('https://example.supabase.co', 'anon-key', signedIn)
+    await store.remove('https://example.supabase.co/storage/v1/object/public/signalisation-photos/u1/a1.jpg')
+    expect(calls[0].url).toBe('https://example.supabase.co/storage/v1/object/signalisation-photos/u1/a1.jpg')
+    expect(calls[0].headers).toMatchObject({ Authorization: 'Bearer jeton-julie' })
+  })
+
+  it('ignore une adresse qui ne vient pas du bucket', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    await new SupabasePhotoStore('https://example.supabase.co', 'anon-key', signedIn).remove('data:image/jpeg;base64,AAAA')
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
   it('dépose la photo dans le dossier du compte, avec son jeton', async () => {
     const calls: { url: string; init?: RequestInit }[] = []
     vi.stubGlobal(

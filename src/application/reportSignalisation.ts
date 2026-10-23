@@ -15,7 +15,7 @@ export async function reportSignalisation(
   auth: Pick<AuthGateway, 'current'>,
   store: SignalisationStore,
   input: ReportInput,
-  photos?: PhotoStore,
+  photos?: Pick<PhotoStore, 'upload'>,
 ): Promise<Signalisation> {
   requireAccount(auth)
   const { photo, ...details } = input

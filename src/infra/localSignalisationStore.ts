@@ -1,11 +1,13 @@
 import type { SignalisationStore } from '../application/ports'
-import { addComment, ALREADY_VOTED_GONE, confirmSignalisation, reportGone, type Signalisation } from '../domain/signalisation'
+import { addComment, ALREADY_VOTED_GONE, confirmSignalisation, markResolved, NOT_OWNER, reportGone, type Signalisation } from '../domain/signalisation'
 
 const STORAGE_KEY = 'wazoutdoor:signalisations'
 /** Sans serveur, une seule personne utilise le navigateur : ses votes « plus là » y sont gardés */
 const GONE_VOTES_KEY = 'wazoutdoor:gone-voted'
+/** Signalements créés dans ce navigateur : leur auteur·rice peut les retirer */
+const MINE_KEY = 'wazoutdoor:my-signalisations'
 
-type StoredSignalisation = Omit<Signalisation, 'createdAt'> & { createdAt: string }
+type StoredSignalisation = Omit<Signalisation, 'createdAt' | 'resolvedAt'> & { createdAt: string; resolvedAt?: string }
 
 /** Stocke les signalements dans le navigateur. En attendant un vrai backend communautaire (Supabase). */
 export class LocalSignalisationStore implements SignalisationStore {
@@ -13,6 +15,7 @@ export class LocalSignalisationStore implements SignalisationStore {
     const all = await this.list()
     all.push(signalisation)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
+    this.writeIds(MINE_KEY, [...(await this.mySignalisations()), signalisation.id])
   }
 
   async confirm(id: string): Promise<Signalisation> {
@@ -30,16 +33,44 @@ export class LocalSignalisationStore implements SignalisationStore {
   }
 
   async myGoneVotes(): Promise<string[]> {
+    return this.readIds(GONE_VOTES_KEY)
+  }
+
+  async mySignalisations(): Promise<string[]> {
+    return this.readIds(MINE_KEY)
+  }
+
+  async resolve(id: string): Promise<Signalisation> {
+    await this.requireMine(id)
+    return this.change(id, (s) => markResolved(s))
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.requireMine(id)
+    const all = await this.list()
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(all.filter((s) => s.id !== id)))
+    this.writeIds(MINE_KEY, (await this.mySignalisations()).filter((mine) => mine !== id))
+  }
+
+  private async requireMine(id: string): Promise<void> {
+    if (!(await this.mySignalisations()).includes(id)) throw new Error(NOT_OWNER)
+  }
+
+  private readIds(key: string): string[] {
     try {
-      const voted = JSON.parse(localStorage.getItem(GONE_VOTES_KEY) ?? '[]') as unknown
-      return Array.isArray(voted) ? voted.filter((id): id is string => typeof id === 'string') : []
+      const ids = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown
+      return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []
     } catch {
       return []
     }
   }
 
+  private writeIds(key: string, ids: string[]): void {
+    localStorage.setItem(key, JSON.stringify(ids))
+  }
+
   private writeGoneVotes(ids: string[]): void {
-    localStorage.setItem(GONE_VOTES_KEY, JSON.stringify(ids))
+    this.writeIds(GONE_VOTES_KEY, ids)
   }
 
   async addComment(id: string, text: string): Promise<Signalisation> {
@@ -60,7 +91,11 @@ export class LocalSignalisationStore implements SignalisationStore {
     if (!raw) return []
     try {
       const stored = JSON.parse(raw) as StoredSignalisation[]
-      return stored.map((s) => ({ ...s, createdAt: new Date(s.createdAt) }))
+      return stored.map(({ resolvedAt, ...s }) => ({
+        ...s,
+        createdAt: new Date(s.createdAt),
+        ...(resolvedAt ? { resolvedAt: new Date(resolvedAt) } : {}),
+      }))
     } catch {
       return []
     }
