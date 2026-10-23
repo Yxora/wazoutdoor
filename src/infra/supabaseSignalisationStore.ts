@@ -1,4 +1,5 @@
-import type { SignalisationStore } from '../application/ports'
+import { AuthError } from '../application/authError'
+import type { AuthGateway, SignalisationStore } from '../application/ports'
 import type { Signalisation, SignalisationType } from '../domain/signalisation'
 
 interface SignalisationRow {
@@ -39,22 +40,46 @@ function fromRow(row: SignalisationRow): Signalisation {
   }
 }
 
-/** Stocke les signalements dans la table Supabase `signalisations` (lecture et écriture publiques, voir migration SQL). */
+/** Jeton du compte pour les écritures : sans session, ou si la base refuse le jeton, l'utilisateur·rice doit se connecter */
+export async function accountHeaders(auth: Pick<AuthGateway, 'accessToken'>, anonKey: string): Promise<Record<string, string>> {
+  const token = await auth.accessToken()
+  if (!token) throw new AuthError('not_signed_in')
+  return { apikey: anonKey, Authorization: `Bearer ${token}` }
+}
+
+export function rejectedAccount(response: Response): boolean {
+  return response.status === 401 || response.status === 403
+}
+
+/**
+ * Stocke les signalements dans la table Supabase `signalisations`.
+ * Lecture publique avec la clé anon ; écritures avec le jeton du compte (RLS, voir migration auth).
+ */
 export class SupabaseSignalisationStore implements SignalisationStore {
   private readonly endpoint: string
-  private readonly headers: HeadersInit
+  private readonly headers: Record<string, string>
 
-  constructor(url: string, anonKey: string) {
+  constructor(
+    url: string,
+    private readonly anonKey: string,
+    private readonly auth: Pick<AuthGateway, 'accessToken'>,
+  ) {
     this.endpoint = `${url.replace(/\/$/, '')}/rest/v1/signalisations`
     this.headers = { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' }
   }
 
+  private async writeHeaders(): Promise<Record<string, string>> {
+    return { ...(await accountHeaders(this.auth, this.anonKey)), 'Content-Type': 'application/json' }
+  }
+
   async save(signalisation: Signalisation): Promise<void> {
+    // user_id est rempli par la base (default auth.uid())
     const response = await fetch(this.endpoint, {
       method: 'POST',
-      headers: { ...this.headers, Prefer: 'return=minimal' },
+      headers: { ...(await this.writeHeaders()), Prefer: 'return=minimal' },
       body: JSON.stringify(toRow(signalisation)),
     })
+    if (rejectedAccount(response)) throw new AuthError('not_signed_in')
     if (!response.ok) throw new Error(`Supabase : échec de l'enregistrement du signalement (HTTP ${response.status})`)
   }
 
@@ -62,9 +87,10 @@ export class SupabaseSignalisationStore implements SignalisationStore {
   private async rpc(name: string, args: Record<string, string>): Promise<Signalisation> {
     const response = await fetch(`${this.endpoint.replace('/signalisations', '')}/rpc/${name}`, {
       method: 'POST',
-      headers: this.headers,
+      headers: await this.writeHeaders(),
       body: JSON.stringify(args),
     })
+    if (rejectedAccount(response)) throw new AuthError('not_signed_in')
     if (!response.ok) throw new Error(`Supabase : échec de l'opération sur le signalement (HTTP ${response.status})`)
     const rows = (await response.json()) as SignalisationRow[] | SignalisationRow
     const row = Array.isArray(rows) ? rows[0] : rows

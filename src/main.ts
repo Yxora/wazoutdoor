@@ -55,22 +55,28 @@ const parser = new GpxRouteParser()
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// Signalements partagés entre tout le monde si Supabase est configuré, sinon stockage local au navigateur.
-const signalisationStore: SignalisationStore =
-  supabaseUrl && supabaseAnonKey ? new SupabaseSignalisationStore(supabaseUrl, supabaseAnonKey) : new LocalSignalisationStore()
+/** Les écritures Supabase partent avec le jeton du compte : les stores dépendent de l'authentification */
+function createStores(auth: AuthGateway): { signalisationStore: SignalisationStore; photoStore: PhotoStore } {
+  // Signalements partagés entre tout le monde si Supabase est configuré, sinon stockage local au navigateur.
+  // Photos : Supabase Storage si configuré, sinon gardées dans le navigateur avec le signalement.
+  if (!supabaseUrl || !supabaseAnonKey) return { signalisationStore: new LocalSignalisationStore(), photoStore: new LocalPhotoStore() }
+  return {
+    signalisationStore: new SupabaseSignalisationStore(supabaseUrl, supabaseAnonKey, auth),
+    photoStore: new SupabasePhotoStore(supabaseUrl, supabaseAnonKey, auth),
+  }
+}
 
-// Photos des signalements : Supabase Storage si configuré, sinon gardées dans le navigateur avec le signalement
-const photoStore: PhotoStore = supabaseUrl && supabaseAnonKey ? new SupabasePhotoStore(supabaseUrl, supabaseAnonKey) : new LocalPhotoStore()
-
-const deps: EvaluationDeps = {
-  elevation: new IgnElevation(),
-  daylight: new OpenMeteoDaylight(),
-  weather: new MeteoFranceVigilance(import.meta.env.VITE_METEOFRANCE_API_KEY),
-  forecast: new OpenMeteoForecast(),
-  places: new RefugesInfoPlaces(),
-  fireRisk: new NasaFirmsFireRisk(import.meta.env.VITE_FIRMS_API_KEY),
-  protectedAreas: new IgnProtectedAreas(),
-  signalisations: signalisationStore,
+function createEvaluationDeps(signalisationStore: SignalisationStore): EvaluationDeps {
+  return {
+    elevation: new IgnElevation(),
+    daylight: new OpenMeteoDaylight(),
+    weather: new MeteoFranceVigilance(import.meta.env.VITE_METEOFRANCE_API_KEY),
+    forecast: new OpenMeteoForecast(),
+    places: new RefugesInfoPlaces(),
+    fireRisk: new NasaFirmsFireRisk(import.meta.env.VITE_FIRMS_API_KEY),
+    protectedAreas: new IgnProtectedAreas(),
+    signalisations: signalisationStore,
+  }
 }
 
 async function checkSupabase() {
@@ -146,6 +152,8 @@ function redFlagTypes(preferences: SignalisationPreferences): Set<SignalisationT
 
 async function main() {
   const auth = await createAuth()
+  const { signalisationStore, photoStore } = createStores(auth)
+  const deps = createEvaluationDeps(signalisationStore)
   const signInError = await completeSignInReturn(auth)
   if (signInError) showToast(signInError)
 
