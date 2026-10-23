@@ -170,6 +170,26 @@ body {
   margin: 0 0 var(--od-space-4);
 }
 
+/* Sans compte : le score suit les critères standards, un lien propose de se connecter */
+.standard-notice {
+  margin: 0 0 var(--od-space-4);
+  padding: var(--od-space-2) var(--od-space-3);
+  border-radius: 8px;
+  background: var(--od-accent-soft);
+  color: var(--od-ink);
+}
+
+.standard-notice__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Distance, dénivelé et durée : trois cases côte à côte, y compris sur mobile */
 .stats {
   display: grid;

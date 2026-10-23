@@ -181,7 +181,11 @@ async function main() {
     signalisationLayer.setRedFlags(redFlagTypes(next.signalisationPreferences))
     // Le score se recalcule sur les données déjà reçues, sans rappeler les sources
     if (lastView) {
-      lastView = { ...lastView, evaluation: applyPreferences(lastView.evaluation, lastView.profile, next.preferences, next.signalisationPreferences) }
+      lastView = {
+        ...lastView,
+        evaluation: applyPreferences(lastView.evaluation, lastView.profile, next.preferences, next.signalisationPreferences),
+        standardCriteria: auth.current() === null,
+      }
       scoreView.show(lastView)
     }
   }
@@ -210,7 +214,11 @@ async function main() {
   }
   renderPanel()
 
-  const scoreView = createScoreView()
+  // Sans compte, « Se connecter » sous le score ouvre Personnaliser, qui propose la création du compte
+  const scoreView = createScoreView(() => {
+    scoreView.closeDetail()
+    nav.showCustom()
+  })
   const importModal = createImportModal(
     async ({ profileId, start, gpxText }) => {
       try {
@@ -220,7 +228,7 @@ async function main() {
         const evaluation = await evaluateRoute(deps, { route, profile, start, preferences, signalisationPreferences })
         layers.show(route, evaluation.places, evaluation.protectedAreas)
         routeShown = true
-        lastView = { routeName: route.name, profile, start, evaluation }
+        lastView = { routeName: route.name, profile, start, evaluation, standardCriteria: auth.current() === null }
         scoreView.show(lastView)
         playScoreEffect(evaluation.score.total, evaluation.score.vetoedBy !== null, evaluation.score.verdict)
         importModal.setBusy(false)

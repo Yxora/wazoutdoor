@@ -33,6 +33,8 @@ export interface BottomNav {
   planOpened(): void
   /** La modale d'import vient de se fermer : la carte seule reste affichée : Consulter devient actif */
   planClosed(): void
+  /** Ouvre Personnaliser (sans compte : la création du compte) */
+  showCustom(): void
 }
 
 export function createBottomNav(panel: HTMLElement, actions: BottomNavActions): BottomNav {
@@ -100,6 +102,10 @@ export function createBottomNav(panel: HTMLElement, actions: BottomNavActions): 
       if (base !== plan) return
       base = consult
       if (panel.dataset.view !== 'custom') select(base)
+    },
+    showCustom() {
+      actions.onLeaveReport()
+      showCustom(true)
     },
   }
 }
