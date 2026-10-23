@@ -34,7 +34,7 @@ describe('reportSignalisation', () => {
 
   it('envoie la photo puis joint son adresse au signalement', async () => {
     const store = fakeStore()
-    const photos = { upload: async (id: string) => `https://photos/${id}.jpg` }
+    const photos = { upload: async (id: string) => `https://photos/${id}.jpg`, remove: async () => {} }
 
     const result = await reportSignalisation(
       signedIn,
@@ -53,12 +53,27 @@ describe('reportSignalisation', () => {
       upload: async () => {
         throw new Error('réseau')
       },
+      remove: async () => {},
     }
 
     await expect(
       reportSignalisation(signedIn, store, { type: 'arbre', description: '', position: { lat: 48, lng: 7 }, photo: 'data:x' }, photos),
     ).rejects.toThrow()
     expect(store.saved).toEqual([])
+  })
+
+  it('efface la photo si l’enregistrement échoue ensuite (quota atteint)', async () => {
+    const store = fakeStore()
+    store.save = async () => {
+      throw new Error('Vous avez beaucoup participé cette dernière heure, réessayez plus tard.')
+    }
+    const removed: string[] = []
+    const photos = { upload: async (id: string) => `https://photos/${id}.jpg`, remove: async (url: string) => void removed.push(url) }
+
+    await expect(
+      reportSignalisation(signedIn, store, { type: 'arbre', description: '', position: { lat: 48, lng: 7 }, photo: 'data:x' }, photos),
+    ).rejects.toThrow('réessayez plus tard')
+    expect(removed).toHaveLength(1)
   })
 
   it('refuse sans compte, avant même d’envoyer la photo', async () => {
@@ -69,6 +84,7 @@ describe('reportSignalisation', () => {
         uploads.push(id)
         return `https://photos/${id}.jpg`
       },
+      remove: async () => {},
     }
 
     const attempt = reportSignalisation(signedOut, store, { type: 'arbre', description: '', position: { lat: 48, lng: 7 }, photo: 'data:x' }, photos)

@@ -451,6 +451,18 @@ describe('SupabaseSignalisationStore : retrait par l’auteur·rice', () => {
     expect((await store.reportGone('a1')).resolvedAt).toEqual(new Date('2026-10-11T08:30:00.000Z'))
   })
 
+  it('quota atteint : message lisible, à l’envoi comme au vote', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ code: 'P0001', message: 'rate_limited' }), { status: 400 })),
+    )
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    await expect(
+      store.save({ id: 'a1', type: 'arbre', description: '', position: { lat: 48, lng: 7 }, createdAt: new Date() }),
+    ).rejects.toThrow('réessayez plus tard')
+    await expect(store.reportGone('a1')).rejects.toThrow('réessayez plus tard')
+  })
+
   it('liste les signalements du compte', async () => {
     stubFetch({ 'rpc/my_signalisations': [{ signalisation_id: 'a1' }] })
     const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)

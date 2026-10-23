@@ -69,6 +69,14 @@ async function sqlError(response: Response): Promise<string | null> {
 const SQL_ERROR_MESSAGE: Record<string, string> = {
   already_voted: ALREADY_VOTED_GONE,
   not_owner: NOT_OWNER,
+  // Quotas par compte (migration quotas) : signalements, commentaires et votes par heure
+  rate_limited: 'Vous avez beaucoup participé cette dernière heure, réessayez plus tard.',
+}
+
+/** Erreur SQL connue : son message lisible ; sinon rien */
+async function knownSqlError(response: Response): Promise<Error | null> {
+  const message = SQL_ERROR_MESSAGE[(await sqlError(response)) ?? '']
+  return message ? new Error(message) : null
 }
 
 /**
@@ -100,6 +108,8 @@ export class SupabaseSignalisationStore implements SignalisationStore {
       body: JSON.stringify(toRow(signalisation)),
     })
     if (rejectedAccount(response)) throw new AuthError('not_signed_in')
+    const known = await knownSqlError(response)
+    if (known) throw known
     if (!response.ok) throw new Error(`Supabase : échec de l'enregistrement du signalement (HTTP ${response.status})`)
   }
 
@@ -111,8 +121,8 @@ export class SupabaseSignalisationStore implements SignalisationStore {
       body: JSON.stringify(args),
     })
     if (rejectedAccount(response)) throw new AuthError('not_signed_in')
-    const known = SQL_ERROR_MESSAGE[(await sqlError(response)) ?? '']
-    if (known) throw new Error(known)
+    const known = await knownSqlError(response)
+    if (known) throw known
     if (!response.ok) throw new Error(`Supabase : échec de l'opération sur le signalement (HTTP ${response.status})`)
     return response
   }
