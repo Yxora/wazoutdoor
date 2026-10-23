@@ -1,12 +1,13 @@
 import type { UserStore } from '../application/ports'
-import { DEFAULT_PREFERENCES, PROFILES, type CriterionPreferences, type ProfileId } from '../domain/profile'
-import { DEFAULT_SIGNALISATION_PREFERENCES, SIGNALISATION_TYPES } from '../domain/signalisation'
 import { DEMO_USER, type User } from '../domain/user'
+import { parseUser } from './userValidation'
 
 const STORAGE_KEY = 'wazoutdoor:user:v2'
-const MODES = ['ignore', 'impact', 'veto']
 
-/** Garde les préférences dans le navigateur ; toute donnée absente ou invalide retombe sur `fallback` (la démo par défaut). */
+/**
+ * Garde les préférences dans le navigateur, pour la démo hors ligne (sans Supabase) ;
+ * toute donnée absente ou invalide retombe sur `fallback` (la démo par défaut).
+ */
 export class LocalUserStore implements UserStore {
   constructor(
     private readonly storage: Storage = localStorage,
@@ -16,24 +17,15 @@ export class LocalUserStore implements UserStore {
   get(): User {
     try {
       const raw = this.storage.getItem(STORAGE_KEY)
-      if (!raw) return this.fallback
-      const stored = JSON.parse(raw) as Partial<User>
-      const activities = (stored.activities ?? []).filter((id): id is ProfileId => id in PROFILES)
-      if (activities.length === 0) return this.fallback
-      const preferences = { ...DEFAULT_PREFERENCES }
-      for (const id of Object.keys(preferences) as (keyof CriterionPreferences)[]) {
-        const mode = stored.preferences?.[id]
-        if (mode && MODES.includes(mode)) preferences[id] = mode
-      }
-      const signalisationPreferences = { ...DEFAULT_SIGNALISATION_PREFERENCES }
-      for (const type of SIGNALISATION_TYPES) {
-        const mode = stored.signalisationPreferences?.[type]
-        if (mode && MODES.includes(mode)) signalisationPreferences[type] = mode
-      }
-      return { ...this.fallback, activities, preferences, signalisationPreferences }
+      return raw ? parseUser(JSON.parse(raw), this.fallback) : this.fallback
     } catch {
       return this.fallback
     }
+  }
+
+  /** Tout est déjà dans le navigateur */
+  async load(): Promise<User> {
+    return this.get()
   }
 
   save(user: User): void {
@@ -43,4 +35,7 @@ export class LocalUserStore implements UserStore {
       // stockage indisponible (navigation privée) : les choix durent le temps de la page
     }
   }
+
+  /** Un seul profil local (Julie, toujours connectée) : rien à effacer */
+  clear(): void {}
 }

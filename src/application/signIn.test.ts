@@ -81,10 +81,13 @@ describe('finishSignIn et signOut', () => {
     expect(await finishSignIn(auth, new URL('https://app.test/?auth=callback&code=abc'))).toEqual(JULIE)
   })
 
-  it('la déconnexion efface le compte courant', async () => {
+  it('la déconnexion efface le compte courant et ses préférences sur l’appareil', async () => {
     const auth = fakeAuth()
     await verifyCode(auth, 'julie@exemple.fr', '123456')
-    await signOut(auth)
+    let clearedFor: string | null | undefined
+    await signOut(auth, { clear: () => (clearedFor = auth.current()?.id ?? null) })
     expect(auth.current()).toBeNull()
+    // Effacé avant la déconnexion : le store sait encore quel compte nettoyer
+    expect(clearedFor).toBe(JULIE.id)
   })
 })

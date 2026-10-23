@@ -119,8 +119,13 @@ export interface RouteLibrary {
 }
 
 export interface UserStore {
+  /** Préférences connues sur l'appareil, sans attendre le réseau */
   get(): User
+  /** Relit les préférences enregistrées (sur le serveur pour un compte) et met à jour ce que renvoie `get()` */
+  load(): Promise<User>
   save(user: User): void
+  /** Efface la copie locale du compte (déconnexion) */
+  clear(): void
 }
 
 /** Connexion par email : lien magique (flux PKCE) ou code à 6 chiffres reçus dans le même email */
