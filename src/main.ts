@@ -4,19 +4,22 @@ import {
   commentSignalisation,
   checkNearbySignalisations,
   confirmSignalisationStillThere,
+  deleteOwnSignalisation,
   listMyGoneVotes,
+  listMySignalisations,
   reportSignalisationGone,
 } from './application/maintainSignalisation'
 import { listActiveSignalisations } from './application/listSignalisations'
 import { locateUser } from './application/locateUser'
-import type { AuthGateway, PhotoStore, SignalisationStore } from './application/ports'
+import type { AuthGateway, PhotoStore, SignalisationStore, UserStore } from './application/ports'
 import { reportSignalisation } from './application/reportSignalisation'
 import { finishSignIn, sendSignInLink, verifyCode } from './application/signIn'
-import { currentUser } from './application/currentUser'
+import { currentUser, loadCurrentUser } from './application/currentUser'
+import { deleteAccount } from './application/deleteAccount'
 import { signOut } from './application/signOut'
 import { updateUser } from './application/updateUser'
 import { PROFILES } from './domain/profile'
-import { DEMO_USER, STANDARD_USER, type User } from './domain/user'
+import { DEMO_USER, type User } from './domain/user'
 import { SIGNALISATION_TYPES, type SignalisationPreferences, type SignalisationType } from './domain/signalisation'
 import { BrowserGeolocator } from './infra/browserGeolocator'
 import { FixedGeolocator, positionFromSearch } from './infra/fixedGeolocator'
@@ -37,6 +40,7 @@ import { callbackUrl, isSignInReturn, SupabaseAuth } from './infra/supabaseAuth'
 import { SupabaseHealth } from './infra/supabaseHealth'
 import { SupabasePhotoStore } from './infra/supabasePhotoStore'
 import { SupabaseSignalisationStore } from './infra/supabaseSignalisationStore'
+import { SupabaseUserStore } from './infra/supabaseUserStore'
 import { createAccountBar, createSignedOutPanel } from './ui/accountPanel'
 import { createMap, createRouteLayers, createSignalisationLayer, showUserPosition } from './ui/map'
 import { createBottomNav } from './ui/bottomNav'
@@ -170,8 +174,10 @@ async function main() {
   const demoPosition = positionFromSearch(window.location.search)
   const geolocator = demoPosition ? new FixedGeolocator(demoPosition) : new BrowserGeolocator()
 
-  // Avec Supabase, un nouveau compte part des critères standards ; Julie ne sert qu'à la démo hors ligne
-  const userStore = new LocalUserStore(localStorage, supabaseUrl && supabaseAnonKey ? STANDARD_USER : DEMO_USER)
+  // Avec Supabase, les préférences suivent le compte (un nouveau compte part des critères standards) ;
+  // Julie ne sert qu'à la démo hors ligne
+  const userStore: UserStore =
+    supabaseUrl && supabaseAnonKey ? new SupabaseUserStore(supabaseUrl, supabaseAnonKey, auth) : new LocalUserStore(localStorage, DEMO_USER)
   const user = () => currentUser(auth, userStore)
   let lastView: ResultView | null = null
 
@@ -181,7 +187,11 @@ async function main() {
     signalisationLayer.setRedFlags(redFlagTypes(next.signalisationPreferences))
     // Le score se recalcule sur les données déjà reçues, sans rappeler les sources
     if (lastView) {
-      lastView = { ...lastView, evaluation: applyPreferences(lastView.evaluation, lastView.profile, next.preferences, next.signalisationPreferences) }
+      lastView = {
+        ...lastView,
+        evaluation: applyPreferences(lastView.evaluation, lastView.profile, next.preferences, next.signalisationPreferences),
+        standardCriteria: auth.current() === null,
+      }
       scoreView.show(lastView)
     }
   }
@@ -206,11 +216,19 @@ async function main() {
       updateUser(auth, userStore, changes)
       applyUser(user())
     })
-    panel.replaceChildren(profile, createAccountBar(account.email, () => signOut(auth)))
+    panel.replaceChildren(profile, createAccountBar(
+        account.email,
+        () => signOut(auth, userStore),
+        () => deleteAccount(auth, userStore),
+      ))
   }
   renderPanel()
 
-  const scoreView = createScoreView()
+  // Sans compte, « Se connecter » sous le score ouvre Personnaliser, qui propose la création du compte
+  const scoreView = createScoreView(() => {
+    scoreView.closeDetail()
+    nav.showCustom()
+  })
   const importModal = createImportModal(
     async ({ profileId, start, gpxText }) => {
       try {
@@ -220,7 +238,7 @@ async function main() {
         const evaluation = await evaluateRoute(deps, { route, profile, start, preferences, signalisationPreferences })
         layers.show(route, evaluation.places, evaluation.protectedAreas)
         routeShown = true
-        lastView = { routeName: route.name, profile, start, evaluation }
+        lastView = { routeName: route.name, profile, start, evaluation, standardCriteria: auth.current() === null }
         scoreView.show(lastView)
         playScoreEffect(evaluation.score.total, evaluation.score.vetoedBy !== null, evaluation.score.verdict)
         importModal.setBusy(false)
@@ -246,16 +264,21 @@ async function main() {
     confirm: (s) => confirmSignalisationStillThere(auth, signalisationStore, s.id),
     reportGone: (s) => reportSignalisationGone(auth, signalisationStore, s.id),
     comment: (s, text) => commentSignalisation(auth, signalisationStore, s.id, text),
+    remove: (s) => deleteOwnSignalisation(auth, signalisationStore, photoStore, s),
     createSignInForm: newSignInForm,
   })
-  // Boutons de la popup selon le compte, et ses votes « Plus là » (bouton grisé)
+  // Boutons de la popup selon le compte, ses votes « Plus là » (bouton grisé) et ses signalements (poubelle)
   const refreshAccountOnMap = async () => {
     const signedIn = auth.current() !== null
-    signalisationLayer.setAccount(signedIn, new Set())
+    signalisationLayer.setAccount({ signedIn, goneVotes: new Set(), mine: new Set() })
     try {
-      signalisationLayer.setAccount(signedIn, await listMyGoneVotes(auth, signalisationStore))
+      const [goneVotes, mine] = await Promise.all([
+        listMyGoneVotes(auth, signalisationStore),
+        listMySignalisations(auth, signalisationStore),
+      ])
+      signalisationLayer.setAccount({ signedIn, goneVotes, mine })
     } catch (error) {
-      console.error(`Votes « Plus là » indisponibles : ${error instanceof Error ? error.message : error}`)
+      console.error(`Votes et signalements du compte indisponibles : ${error instanceof Error ? error.message : error}`)
     }
   }
   refreshAccountOnMap()
@@ -282,7 +305,7 @@ async function main() {
     createSignInForm: newSignInForm,
     onSubmit: async ({ position, type, description, photo }) => {
       const signalisation = await reportSignalisation(auth, signalisationStore, { position, type, description, photo }, photoStore)
-      signalisationLayer.add(signalisation)
+      signalisationLayer.add(signalisation, { mine: true })
       // Après l'envoi : retour sur la carte, centrée sur le nouveau signalement
       nav.showMap()
       signalisationLayer.focus(signalisation)
@@ -311,12 +334,27 @@ async function main() {
   // Signaler est l'onglet par défaut : son écran s'ouvre dès l'arrivée (sauf au retour de Strava)
   if (!returnedFromStrava) signalisationControl.start()
 
+  // Préférences du compte enregistrées sur un autre appareil : on les relit, puis on redessine si elles ont changé
+  async function syncUser() {
+    const before = JSON.stringify(user())
+    try {
+      const next = await loadCurrentUser(auth, userStore)
+      if (JSON.stringify(next) === before) return
+      renderPanel()
+      applyUser(next)
+    } catch (error) {
+      console.error(`Préférences du compte indisponibles : ${error instanceof Error ? error.message : error}`)
+    }
+  }
+  syncUser()
+
   // Connexion par code, par le lien dans un autre onglet, déconnexion ou session expirée
   auth.onChange(() => {
     renderPanel()
     applyUser(user())
     signalisationControl.refresh()
     refreshAccountOnMap()
+    syncUser()
   })
 
   checkSupabase()

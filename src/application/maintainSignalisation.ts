@@ -2,7 +2,7 @@ import { findNearbySignalisations, type NearbySignalisations, type Signalisation
 import type { Coordinates } from '../domain/coordinates'
 import type { SignalisationType } from '../domain/signalisation'
 import { requireAccount } from './authError'
-import type { AuthGateway, SignalisationStore } from './ports'
+import type { AuthGateway, PhotoStore, SignalisationStore } from './ports'
 
 /** Ce qui existe déjà autour de la position, avant d'enregistrer un nouveau signalement */
 export async function checkNearbySignalisations(
@@ -20,7 +20,7 @@ export async function confirmSignalisationStillThere(auth: Pick<AuthGateway, 'cu
   return store.confirm(id)
 }
 
-/** « Plus là » : à deux voix, le signalement est résolu et disparaît de la carte et du score */
+/** « Plus là » : à deux voix, le signalement est résolu et disparaît de la carte et du score ; tout de suite si c'est le sien */
 export async function reportSignalisationGone(auth: Pick<AuthGateway, 'current'>, store: SignalisationStore, id: string): Promise<Signalisation> {
   requireAccount(auth)
   return store.reportGone(id)
@@ -36,4 +36,25 @@ export async function listMyGoneVotes(auth: Pick<AuthGateway, 'current'>, store:
 export async function commentSignalisation(auth: Pick<AuthGateway, 'current'>, store: SignalisationStore, id: string, text: string): Promise<Signalisation> {
   requireAccount(auth)
   return store.addComment(id, text)
+}
+
+/** Signalements créés par le compte : seuls ceux-là peuvent être retirés. Vide sans compte */
+export async function listMySignalisations(auth: Pick<AuthGateway, 'current'>, store: SignalisationStore): Promise<Set<string>> {
+  if (!auth.current()) return new Set()
+  return new Set(await store.mySignalisations())
+}
+
+/**
+ * L'auteur·rice supprime son signalement (signalé par erreur). La photo part en premier : si son effacement échoue, rien n'est supprimé,
+ * pour ne pas laisser une photo publique sans signalement.
+ */
+export async function deleteOwnSignalisation(
+  auth: Pick<AuthGateway, 'current'>,
+  store: SignalisationStore,
+  photos: PhotoStore,
+  signalisation: Signalisation,
+): Promise<void> {
+  requireAccount(auth)
+  if (signalisation.photoUrl) await photos.remove(signalisation.photoUrl)
+  await store.remove(signalisation.id)
 }

@@ -77,16 +77,25 @@ export interface ProtectedAreaProvider {
 export interface PhotoStore {
   /** Enregistre la photo (data URL JPEG) et renvoie l'adresse à mettre dans le signalement */
   upload(id: string, dataUrl: string): Promise<string>
+  /** Efface la photo à cette adresse (déjà absente : rien à faire) */
+  remove(url: string): Promise<void>
 }
 
 export interface SignalisationStore {
   save(signalisation: Signalisation): Promise<void>
   /** « Toujours là » : la date repart de maintenant, les « plus là » sont remis à zéro */
   confirm(id: string): Promise<Signalisation>
-  /** « Plus là » : une voix de plus ; à deux voix le signalement est résolu. Un seul vote par personne (`ALREADY_VOTED_GONE`) */
+  /**
+   * « Plus là » : une voix de plus ; à deux voix le signalement est résolu. Un seul vote par personne (`ALREADY_VOTED_GONE`).
+   * Venu de son auteur·rice, le signalement est résolu tout de suite.
+   */
   reportGone(id: string): Promise<Signalisation>
   /** Identifiants des signalements où la personne connectée a voté « plus là » */
   myGoneVotes(): Promise<string[]>
+  /** Identifiants des signalements créés par la personne connectée */
+  mySignalisations(): Promise<string[]>
+  /** L'auteur·rice le supprime (signalé par erreur), avec ses commentaires et ses votes */
+  remove(id: string): Promise<void>
   /** Ajoute un commentaire (vide ou limite atteinte : signalement inchangé) */
   addComment(id: string, text: string): Promise<Signalisation>
   list(): Promise<Signalisation[]>
@@ -119,8 +128,13 @@ export interface RouteLibrary {
 }
 
 export interface UserStore {
+  /** Préférences connues sur l'appareil, sans attendre le réseau */
   get(): User
+  /** Relit les préférences enregistrées (sur le serveur pour un compte) et met à jour ce que renvoie `get()` */
+  load(): Promise<User>
   save(user: User): void
+  /** Efface la copie locale du compte (déconnexion) */
+  clear(): void
 }
 
 /** Connexion par email : lien magique (flux PKCE) ou code à 6 chiffres reçus dans le même email */

@@ -79,6 +79,10 @@ export class SupabaseAuth implements AuthGateway {
   private constructor(
     private readonly client: GoTrueClient,
     private readonly redirectTo: string,
+    /** Edge Function `delete-account` (voir supabase/functions) */
+    private readonly deleteEndpoint: string,
+    private readonly anonKey: string,
+    private readonly fetch: typeof globalThis.fetch,
   ) {}
 
   /** Asynchrone : la session gardée est relue avant que `current()` serve */
@@ -94,7 +98,13 @@ export class SupabaseAuth implements AuthGateway {
       autoRefreshToken: true,
       detectSessionInUrl: false,
     })
-    const auth = new SupabaseAuth(client, config.redirectTo)
+    const auth = new SupabaseAuth(
+      client,
+      config.redirectTo,
+      `${config.url.replace(/\/$/, '')}/functions/v1/delete-account`,
+      config.anonKey,
+      config.fetch ?? ((input, init) => globalThis.fetch(input, init)),
+    )
     const { data } = await client.getSession()
     auth.account = accountOf(data.session)
     // Connexion dans un autre onglet, jeton refusé au rafraîchissement, déconnexion
@@ -144,8 +154,23 @@ export class SupabaseAuth implements AuthGateway {
     this.update(null)
   }
 
+  /** Le serveur supprime le compte du jeton ; on efface ensuite la session de l'appareil */
   async deleteAccount(): Promise<void> {
-    throw new Error('Suppression du compte : pas encore disponible.')
+    const token = await this.accessToken()
+    if (!token) throw new AuthError('not_signed_in')
+    let response: Response
+    try {
+      response = await this.fetch(this.deleteEndpoint, {
+        method: 'POST',
+        headers: { apikey: this.anonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+    } catch {
+      throw new AuthError('network')
+    }
+    if (response.status === 401) throw new AuthError('not_signed_in')
+    if (!response.ok) throw new Error('Suppression impossible pour le moment, réessayez plus tard.')
+    await this.signOut()
   }
 
   onChange(listener: (account: Account | null) => void): void {

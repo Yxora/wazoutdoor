@@ -6,3 +6,10 @@ export function currentUser(auth: Pick<AuthGateway, 'current'>, store: UserStore
   const account = auth.current()
   return account ? { ...store.get(), name: account.email } : STANDARD_USER
 }
+
+/** Comme `currentUser`, après avoir relu les préférences enregistrées du compte (autre appareil) */
+export async function loadCurrentUser(auth: Pick<AuthGateway, 'current'>, store: UserStore): Promise<User> {
+  if (!auth.current()) return STANDARD_USER
+  await store.load()
+  return currentUser(auth, store)
+}

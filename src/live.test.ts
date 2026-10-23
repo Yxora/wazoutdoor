@@ -65,4 +65,18 @@ describe.skipIf(!process.env.RUN_LIVE || !supabaseUrl || !supabaseAnonKey)('Supa
     })
     expect([401, 403]).toContain(response.status)
   })
+
+  it('ne laisse pas lire l’auteur·rice des signalements', async () => {
+    const response = await fetch(`${supabaseUrl}/rest/v1/signalisations?select=user_id&limit=1`, {
+      headers: { apikey: supabaseAnonKey!, Authorization: `Bearer ${supabaseAnonKey}` },
+    })
+    expect([401, 403]).toContain(response.status)
+  })
+
+  it('refuse de lire les préférences des comptes avec la seule clé anon', async () => {
+    const response = await fetch(`${supabaseUrl}/rest/v1/user_preferences?select=user_id`, {
+      headers: { apikey: supabaseAnonKey!, Authorization: `Bearer ${supabaseAnonKey}` },
+    })
+    expect([401, 403]).toContain(response.status)
+  })
 })

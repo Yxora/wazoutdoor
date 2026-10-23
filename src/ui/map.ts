@@ -4,11 +4,11 @@ import type { Coordinates } from '../domain/coordinates'
 import { PLACE_CATEGORY_LABEL, type Place, type PlaceCategory } from '../domain/place'
 import type { ProtectedArea } from '../domain/protectedArea'
 import type { Route } from '../domain/route'
-import { isGonePending, isLive, SIGNALISATION_TYPE_LABEL, signalisationStatus, type Signalisation, type SignalisationType } from '../domain/signalisation'
+import { isGonePending, isLive, isResolved, SIGNALISATION_TYPE_LABEL, signalisationStatus, type Signalisation, type SignalisationType } from '../domain/signalisation'
 import { pictoIcon } from './pictos'
 import { isDisplayablePhoto } from './photo'
 import { openPhotoViewer } from './photoViewer'
-import { CHECK_ICON_PATH, CLOSE_ICON_PATH, odIcon, WARNING_ICON_PATH } from './signalisationIcons'
+import { CHECK_ICON_PATH, CLOSE_ICON_PATH, odIcon, WARNING_ICON_PATH, TRASH_ICON_PATH } from './signalisationIcons'
 import { openCommentsDialog } from './commentsDialog'
 import { openDialog } from './dialog'
 import { showToast } from './toast'
@@ -288,6 +288,8 @@ export interface SignalisationActions {
   confirm(signalisation: Signalisation): Promise<Signalisation>
   reportGone(signalisation: Signalisation): Promise<Signalisation>
   comment(signalisation: Signalisation, text: string): Promise<Signalisation>
+  /** L'auteur·rice le supprime, avec sa photo et ses commentaires */
+  remove(signalisation: Signalisation): Promise<void>
   /** Formulaire de connexion, montré à qui veut confirmer, voter ou commenter sans compte */
   createSignInForm(): HTMLElement
 }
@@ -295,6 +297,8 @@ export interface SignalisationActions {
 /** Ce que la popup doit savoir du compte : connecté·e ou non, et ses votes « Plus là » */
 interface AccountState {
   signedIn: boolean
+  /** Signalement créé par ce compte : la poubelle s'affiche */
+  isMine(id: string): boolean
   votedGone(id: string): boolean
   rememberGoneVote(id: string): void
   askSignIn(): void
@@ -311,7 +315,7 @@ function lifecycleButtons(
   const message = document.createElement('p')
   message.className = 'od-popup__message'
   message.setAttribute('role', 'status')
-  const make = (label: string, fullName: string, tone: 'ok' | 'closed', iconPath: string, run: () => Promise<Signalisation>, done: string) => {
+  const make = (label: string, fullName: string, tone: 'ok' | 'closed', iconPath: string, run: () => Promise<Signalisation>, done: (updated: Signalisation) => string) => {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = `od-button od-popup__vote od-popup__vote--${tone}`
@@ -327,7 +331,7 @@ function lifecycleButtons(
       try {
         const updated = await run()
         // La carte se redessine (la fenêtre se ferme) : le retour passe par le toast
-        showToast(done)
+        showToast(done(updated))
         onChanged(updated)
       } catch (error) {
         message.textContent = `Impossible : ${error instanceof Error ? error.message : 'erreur réseau'}`
@@ -336,7 +340,7 @@ function lifecycleButtons(
     })
     return button
   }
-  const still = make('Oui', 'Toujours là', 'ok', CHECK_ICON_PATH, () => actions.confirm(signalisation), 'Merci, signalement confirmé.')
+  const still = make('Oui', 'Toujours là', 'ok', CHECK_ICON_PATH, () => actions.confirm(signalisation), () => 'Merci, signalement confirmé.')
   const gone = make(
     'Non',
     'Plus là',
@@ -347,7 +351,8 @@ function lifecycleButtons(
       account.rememberGoneVote(signalisation.id)
       return updated
     },
-    'Merci. Il disparaît quand deux personnes disent qu’il n’y est plus.',
+    // Son propre signalement est résolu tout de suite ; sinon il faut un second vote
+    (updated) => (isResolved(updated) ? 'Merci, il est retiré de la carte.' : 'Merci. Il disparaît quand deux personnes disent qu’il n’y est plus.'),
   )
   const votes = document.createElement('div')
   votes.className = 'od-popup__votes'
@@ -377,13 +382,29 @@ function lifecycleButtons(
 function signalisationPopup(
   signalisation: Signalisation,
   toConfirm: boolean,
-  lifecycle?: { actions: SignalisationActions; account: AccountState; onChanged: (updated: Signalisation) => void },
+  lifecycle?: {
+    actions: SignalisationActions
+    account: AccountState
+    onChanged: (updated: Signalisation) => void
+    onRemoved: (id: string) => void
+  },
 ): HTMLElement {
   const box = document.createElement('div')
   box.className = 'od-popup'
   const title = document.createElement('strong')
   title.textContent = SIGNALISATION_TYPE_LABEL[signalisation.type]
   box.append(title)
+  if (lifecycle?.account.signedIn && lifecycle.account.isMine(signalisation.id)) {
+    box.classList.add('od-popup--own')
+    const trash = document.createElement('button')
+    trash.type = 'button'
+    trash.className = 'od-popup__trash'
+    trash.setAttribute('aria-label', 'Supprimer mon signalement')
+    trash.title = 'Supprimer mon signalement'
+    trash.append(odIcon(TRASH_ICON_PATH, 18))
+    trash.addEventListener('click', () => openRemoveDialog(signalisation, lifecycle.actions, lifecycle.onRemoved))
+    box.append(trash)
+  }
   if (signalisation.description) box.append(document.createElement('br'), signalisation.description)
   box.append(document.createElement('br'), `Signalé ${relativeTimeLabel(signalisation.createdAt)}${toConfirm ? ' · à confirmer' : ''}`)
   if (isGonePending(signalisation)) box.append(document.createElement('br'), 'Une personne dit qu’il n’y est plus : à confirmer.')
@@ -415,17 +436,56 @@ function signalisationPopup(
   return box
 }
 
+/** L'auteur·rice supprime son signalement (signalé par erreur) : il est effacé avec sa photo et ses commentaires */
+function openRemoveDialog(signalisation: Signalisation, actions: SignalisationActions, onRemoved: (id: string) => void): void {
+  const label = SIGNALISATION_TYPE_LABEL[signalisation.type]
+  const { box, close } = openDialog({ title: 'Supprimer mon signalement', label: `Supprimer mon signalement : ${label}` })
+  const intro = document.createElement('p')
+  intro.className = 'signin__text'
+  intro.textContent = `${label} signalé par erreur ? Il sera effacé, avec sa photo et ses commentaires.`
+  const error = document.createElement('p')
+  error.className = 'od-error'
+  error.setAttribute('role', 'alert')
+  error.hidden = true
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'od-button od-button--danger'
+  button.textContent = 'Supprimer mon signalement'
+  button.addEventListener('click', async () => {
+    button.disabled = true
+    error.hidden = true
+    try {
+      await actions.remove(signalisation)
+      close()
+      onRemoved(signalisation.id)
+      showToast('Signalement supprimé.')
+    } catch (cause) {
+      error.textContent = `Impossible : ${cause instanceof Error ? cause.message : 'erreur réseau'}`
+      error.hidden = false
+      button.disabled = false
+    }
+  })
+  box.append(intro, button, error)
+  setTimeout(() => button.focus(), 0)
+}
+
 export interface SignalisationLayer {
   show(signalisations: Signalisation[]): void
-  add(signalisation: Signalisation): void
+  /** Ajoute un signalement ; `mine` : il vient d'être créé par ce compte */
+  add(signalisation: Signalisation, options?: { mine?: boolean }): void
+  /** Retire un signalement supprimé */
+  remove(id: string): void
   /** Remplace un signalement modifié (même identifiant) */
   replace(signalisation: Signalisation): void
   /** Centre la carte sur le signalement et ouvre sa fenêtre (sauf `openPopup: false`) */
   focus(signalisation: Signalisation, options?: { openPopup?: boolean }): void
   /** Types réglés sur « Red flag » par l'utilisateur·rice : leurs points émettent une onde rouge */
   setRedFlags(types: ReadonlySet<SignalisationType>): void
-  /** Connexion ou déconnexion : boutons de la popup et votes « Plus là » du compte ; ferme l'invitation à se connecter */
-  setAccount(signedIn: boolean, goneVotes: ReadonlySet<string>): void
+  /**
+   * Connexion ou déconnexion : boutons de la popup, votes « Plus là » du compte et ses propres signalements
+   * (poubelle) ; ferme l'invitation à se connecter
+   */
+  setAccount(state: { signedIn: boolean; goneVotes: ReadonlySet<string>; mine: ReadonlySet<string> }): void
 }
 
 /** Sans compte, confirmer, voter ou commenter ouvre cette invitation à se connecter */
@@ -483,6 +543,7 @@ export function createSignalisationLayer(map: L.Map, actions?: SignalisationActi
   let signedIn = false
   // Votes « Plus là » du compte : lus sur le serveur, complétés tout de suite après un vote
   let goneVotes = new Set<string>()
+  let mine = new Set<string>()
   let closeInvite: (() => void) | null = null
   // Signalement dont la fenêtre est ouverte : on la rouvre quand le compte change
   let openId: string | null = null
@@ -491,6 +552,7 @@ export function createSignalisationLayer(map: L.Map, actions?: SignalisationActi
     get signedIn() {
       return signedIn
     },
+    isMine: (id) => mine.has(id),
     votedGone: (id) => goneVotes.has(id),
     rememberGoneVote: (id) => void goneVotes.add(id),
     askSignIn: () => {
@@ -507,7 +569,7 @@ export function createSignalisationLayer(map: L.Map, actions?: SignalisationActi
       title: label,
       alt: label,
     })
-      .bindPopup(signalisationPopup(signalisation, toConfirm, actions && { actions, account, onChanged: (updated) => api.replace(updated) }))
+      .bindPopup(signalisationPopup(signalisation, toConfirm, actions && { actions, account, onChanged: (updated) => api.replace(updated), onRemoved: (id) => api.remove(id) }))
       .on('popupopen', () => (openId = signalisation.id))
       .on('popupclose', () => {
         if (openId === signalisation.id) openId = null
@@ -535,8 +597,13 @@ export function createSignalisationLayer(map: L.Map, actions?: SignalisationActi
       signalisations = next
       render()
     },
-    add(signalisation) {
+    add(signalisation, options) {
       signalisations = [...signalisations, signalisation]
+      if (options?.mine) mine.add(signalisation.id)
+      render()
+    },
+    remove(id) {
+      signalisations = signalisations.filter((s) => s.id !== id)
       render()
     },
     replace(signalisation) {
@@ -552,9 +619,10 @@ export function createSignalisationLayer(map: L.Map, actions?: SignalisationActi
       redFlags = types
       render()
     },
-    setAccount(nextSignedIn, nextGoneVotes) {
-      signedIn = nextSignedIn
-      goneVotes = new Set(nextGoneVotes)
+    setAccount(state) {
+      signedIn = state.signedIn
+      goneVotes = new Set(state.goneVotes)
+      mine = new Set(state.mine)
       if (signedIn) closeInvite?.()
       // Le rendu ferme la fenêtre ouverte : on la rouvre, à jour
       const reopen = openId

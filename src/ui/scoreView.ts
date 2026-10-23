@@ -9,6 +9,8 @@ export interface ResultView {
   profile: Profile
   start: Date
   evaluation: Evaluation
+  /** Sans compte : le score suit les critères standards, pas des préférences personnelles */
+  standardCriteria: boolean
 }
 
 export interface ScoreView {
@@ -230,7 +232,14 @@ function infoButton(notes: Note[]): HTMLElement {
   return button
 }
 
-function detailContent({ routeName, profile, start, evaluation }: ResultView): Child[] {
+/** Sans compte : dire que le score suit les critères standards, et proposer de se connecter pour les régler */
+function standardNotice(onSignIn: () => void): HTMLElement {
+  const button = el('button', { type: 'button', className: 'standard-notice__link' }, 'Se connecter pour les régler')
+  button.addEventListener('click', onSignIn)
+  return el('p', { className: 'standard-notice' }, 'Score calculé avec les critères standards. ', button)
+}
+
+function detailContent({ routeName, profile, start, evaluation, standardCriteria }: ResultView, onSignIn: () => void): Child[] {
   const { summary, score } = evaluation
   const ascent = summary.ascentM === null ? 'n.d.' : `+${Math.round(summary.ascentM)} m`
   // Vitesse moyenne réellement retenue (distance / durée estimée), à côté des hypothèses du profil
@@ -278,12 +287,16 @@ function detailContent({ routeName, profile, start, evaluation }: ResultView): C
     ),
     el('p', { className: 'summary' }, `Départ ${timeFormat.format(start)}, arrivée vers ${timeFormat.format(summary.end)}.`),
     scoreBadge(evaluation),
+    standardCriteria ? standardNotice(onSignIn) : '',
     el('ul', { className: 'criteria' }, ...[...score.criteria].sort((a, b) => displayRank(a) - displayRank(b)).map(criterionCard)),
   ]
 }
 
-/** Bandeau de score en bas de la carte ; un clic ouvre la modale avec le détail des critères */
-export function createScoreView(): ScoreView {
+/**
+ * Bandeau de score en bas de la carte ; un clic ouvre la modale avec le détail des critères.
+ * `onSignIn` : sans compte, le lien « Se connecter » de la mention « critères standards ».
+ */
+export function createScoreView(onSignIn: () => void): ScoreView {
   const bar = el('button', { type: 'button', className: 'score-bar' })
   bar.hidden = true
   bar.setAttribute('aria-haspopup', 'dialog')
@@ -315,11 +328,11 @@ export function createScoreView(): ScoreView {
           'span',
           { className: 'score-bar__text' },
           el('strong', {}, score.verdict ? VERDICT_LABEL[score.verdict] : 'Score indisponible'),
-          el('small', {}, `${view.routeName} · voir le détail`),
+          el('small', {}, `${view.routeName} · ${view.standardCriteria ? 'critères standards · ' : ''}voir le détail`),
         ),
       )
       bar.hidden = false
-      body.replaceChildren(...detailContent(view))
+      body.replaceChildren(...detailContent(view, onSignIn))
       dialog.scrollTop = 0
     },
   }

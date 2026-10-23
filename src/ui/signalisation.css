@@ -277,8 +277,47 @@
 }
 
 .od-popup {
+  position: relative;
   font: var(--od-body);
   color: var(--od-ink);
+}
+
+/* Signalement du compte : la poubelle en haut à droite, à gauche de la croix de Leaflet */
+.od-popup--own > strong:first-child {
+  display: inline-block;
+  padding-right: 36px;
+}
+
+.od-popup__trash {
+  position: absolute;
+  top: -6px;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--od-radius-md);
+  background: none;
+  color: var(--od-status-closed);
+  cursor: pointer;
+}
+
+.od-popup__trash:hover {
+  background: var(--od-status-closed-soft);
+}
+
+.od-popup__trash:focus-visible {
+  outline: none;
+  box-shadow: var(--od-focus-ring);
+}
+
+/* Supprimer mon signalement : action destructive */
+.od-button--danger {
+  border: 1px solid var(--od-status-closed);
+  background: var(--od-status-closed);
+  color: #fff;
 }
 
 /* Red flag : onde rouge qui part du point et s'élargit en boucle */
@@ -749,4 +788,17 @@
 
 .account-bar p {
   margin: 0;
+}
+
+/* Action rare et destructive : discrète, en rouge, sous la déconnexion */
+#panel .account-bar__delete {
+  justify-self: start;
+  min-height: var(--od-size-touch);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--od-status-closed);
+  font: var(--od-caption);
+  text-decoration: underline;
+  cursor: pointer;
 }

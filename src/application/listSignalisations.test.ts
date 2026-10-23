@@ -4,7 +4,7 @@ import { listActiveSignalisations } from './listSignalisations'
 import type { SignalisationStore } from './ports'
 
 function storeWith(signalisations: Signalisation[]): SignalisationStore {
-  return { save: async () => {}, confirm: async () => Promise.reject(new Error('inutilisé')), reportGone: async () => Promise.reject(new Error('inutilisé')), addComment: async () => Promise.reject(new Error('inutilisé')), myGoneVotes: async () => [], list: async () => signalisations }
+  return { save: async () => {}, confirm: async () => Promise.reject(new Error('inutilisé')), reportGone: async () => Promise.reject(new Error('inutilisé')), addComment: async () => Promise.reject(new Error('inutilisé')), myGoneVotes: async () => [], mySignalisations: async () => [], remove: async () => {}, list: async () => signalisations }
 }
 
 const POSITION = { lat: 48.05, lng: 7.02 }

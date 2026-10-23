@@ -3,6 +3,7 @@ import type { Account } from '../domain/account'
 import { AuthError } from './authError'
 import type { AuthGateway } from './ports'
 import { finishSignIn, sendSignInLink, verifyCode } from './signIn'
+import { deleteAccount } from './deleteAccount'
 import { signOut } from './signOut'
 
 const JULIE: Account = { id: 'u1', email: 'julie@exemple.fr' }
@@ -31,7 +32,10 @@ function fakeAuth(): AuthGateway & { calls: string[]; account: Account | null } 
       auth.calls.push('signOut')
       auth.account = null
     },
-    deleteAccount: async () => {},
+    deleteAccount: async () => {
+      auth.calls.push('deleteAccount')
+      auth.account = null
+    },
     onChange: () => {},
   }
   return auth
@@ -81,10 +85,31 @@ describe('finishSignIn et signOut', () => {
     expect(await finishSignIn(auth, new URL('https://app.test/?auth=callback&code=abc'))).toEqual(JULIE)
   })
 
-  it('la déconnexion efface le compte courant', async () => {
+  it('la déconnexion efface le compte courant et ses préférences sur l’appareil', async () => {
     const auth = fakeAuth()
     await verifyCode(auth, 'julie@exemple.fr', '123456')
-    await signOut(auth)
+    let clearedFor: string | null | undefined
+    await signOut(auth, { clear: () => (clearedFor = auth.current()?.id ?? null) })
     expect(auth.current()).toBeNull()
+    // Effacé avant la déconnexion : le store sait encore quel compte nettoyer
+    expect(clearedFor).toBe(JULIE.id)
+  })
+})
+
+describe('deleteAccount', () => {
+  it('efface les préférences de l’appareil, puis supprime le compte', async () => {
+    const auth = fakeAuth()
+    await verifyCode(auth, 'julie@exemple.fr', '123456')
+    const order: string[] = []
+    await deleteAccount(auth, { clear: () => void order.push(`clear:${auth.current()?.id}`) })
+    expect(order).toEqual(['clear:u1'])
+    expect(auth.calls.at(-1)).toBe('deleteAccount')
+    expect(auth.current()).toBeNull()
+  })
+
+  it('sans compte, ne fait rien', async () => {
+    const auth = fakeAuth()
+    await expect(deleteAccount(auth, { clear: () => {} })).rejects.toMatchObject({ code: 'not_signed_in' })
+    expect(auth.calls).toEqual([])
   })
 })

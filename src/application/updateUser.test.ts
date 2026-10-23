@@ -8,9 +8,11 @@ function memoryStore(initial: User = DEMO_USER): UserStore & { saved: User | nul
   const store = {
     saved: null as User | null,
     get: () => store.saved ?? initial,
+    load: async () => store.get(),
     save: (user: User) => {
       store.saved = user
     },
+    clear: () => {},
   }
   return store
 }
