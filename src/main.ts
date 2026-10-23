@@ -4,6 +4,7 @@ import {
   commentSignalisation,
   checkNearbySignalisations,
   confirmSignalisationStillThere,
+  listMyGoneVotes,
   reportSignalisationGone,
 } from './application/maintainSignalisation'
 import { listActiveSignalisations } from './application/listSignalisations'
@@ -245,7 +246,19 @@ async function main() {
     confirm: (s) => confirmSignalisationStillThere(auth, signalisationStore, s.id),
     reportGone: (s) => reportSignalisationGone(auth, signalisationStore, s.id),
     comment: (s, text) => commentSignalisation(auth, signalisationStore, s.id, text),
+    createSignInForm: newSignInForm,
   })
+  // Boutons de la popup selon le compte, et ses votes « Plus là » (bouton grisé)
+  const refreshAccountOnMap = async () => {
+    const signedIn = auth.current() !== null
+    signalisationLayer.setAccount(signedIn, new Set())
+    try {
+      signalisationLayer.setAccount(signedIn, await listMyGoneVotes(auth, signalisationStore))
+    } catch (error) {
+      console.error(`Votes « Plus là » indisponibles : ${error instanceof Error ? error.message : error}`)
+    }
+  }
+  refreshAccountOnMap()
   signalisationLayer.setRedFlags(redFlagTypes(user().signalisationPreferences))
   listActiveSignalisations(signalisationStore)
     .then((signalisations) => signalisationLayer.show(signalisations))
@@ -303,6 +316,7 @@ async function main() {
     renderPanel()
     applyUser(user())
     signalisationControl.refresh()
+    refreshAccountOnMap()
   })
 
   checkSupabase()

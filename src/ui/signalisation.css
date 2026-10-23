@@ -552,8 +552,8 @@
   padding-left: var(--od-space-4);
 }
 
-/* Conversation d'un signalement : fenêtre par-dessus la carte */
-.comments-dialog {
+/* Fenêtre par-dessus la carte (ui/dialog.ts) : conversation, invitation à se connecter */
+.od-dialog {
   position: fixed;
   inset: 0;
   z-index: 1100;
@@ -563,23 +563,30 @@
   background: rgb(0 0 0 / 0.5);
 }
 
-.comments-dialog__box {
+.od-dialog__box {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  align-content: start;
   gap: var(--od-space-3);
   width: min(100%, 460px);
   max-height: 85dvh;
   padding: var(--od-space-4);
+  overflow-y: auto;
   border-radius: 12px;
   background: var(--od-surface-raised);
   color: var(--od-ink);
 }
 
-.comments-dialog__header {
+.od-dialog__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--od-space-2);
+}
+
+/* Conversation : la liste défile, le champ reste visible */
+.comments-dialog__box {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow-y: visible;
 }
 
 .comments-dialog__list {

@@ -1,7 +1,9 @@
 import type { SignalisationStore } from '../application/ports'
-import { addComment, confirmSignalisation, reportGone, type Signalisation } from '../domain/signalisation'
+import { addComment, ALREADY_VOTED_GONE, confirmSignalisation, reportGone, type Signalisation } from '../domain/signalisation'
 
 const STORAGE_KEY = 'wazoutdoor:signalisations'
+/** Sans serveur, une seule personne utilise le navigateur : ses votes « plus là » y sont gardés */
+const GONE_VOTES_KEY = 'wazoutdoor:gone-voted'
 
 type StoredSignalisation = Omit<Signalisation, 'createdAt'> & { createdAt: string }
 
@@ -14,11 +16,30 @@ export class LocalSignalisationStore implements SignalisationStore {
   }
 
   async confirm(id: string): Promise<Signalisation> {
-    return this.change(id, (s) => confirmSignalisation(s))
+    const confirmed = await this.change(id, (s) => confirmSignalisation(s))
+    this.writeGoneVotes((await this.myGoneVotes()).filter((voted) => voted !== id))
+    return confirmed
   }
 
   async reportGone(id: string): Promise<Signalisation> {
-    return this.change(id, reportGone)
+    const voted = await this.myGoneVotes()
+    if (voted.includes(id)) throw new Error(ALREADY_VOTED_GONE)
+    const updated = await this.change(id, reportGone)
+    this.writeGoneVotes([...voted, id])
+    return updated
+  }
+
+  async myGoneVotes(): Promise<string[]> {
+    try {
+      const voted = JSON.parse(localStorage.getItem(GONE_VOTES_KEY) ?? '[]') as unknown
+      return Array.isArray(voted) ? voted.filter((id): id is string => typeof id === 'string') : []
+    } catch {
+      return []
+    }
+  }
+
+  private writeGoneVotes(ids: string[]): void {
+    localStorage.setItem(GONE_VOTES_KEY, JSON.stringify(ids))
   }
 
   async addComment(id: string, text: string): Promise<Signalisation> {

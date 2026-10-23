@@ -169,6 +169,9 @@ export function confirmSignalisation(signalisation: Signalisation, now = new Dat
   return { ...signalisation, createdAt: now, goneVotes: 0 }
 }
 
+/** Une personne ne vote « plus là » qu'une fois par signalement (jusqu'au prochain « toujours là ») */
+export const ALREADY_VOTED_GONE = 'Vous avez déjà dit qu’il n’y est plus.'
+
 /** « Plus là » : une voix de plus ; à deux voix le signalement est résolu */
 export function reportGone(signalisation: Signalisation): Signalisation {
   return { ...signalisation, goneVotes: (signalisation.goneVotes ?? 0) + 1 }

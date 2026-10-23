@@ -1,6 +1,6 @@
 import { AuthError } from '../application/authError'
 import type { AuthGateway, SignalisationStore } from '../application/ports'
-import type { Signalisation, SignalisationType } from '../domain/signalisation'
+import { ALREADY_VOTED_GONE, type Signalisation, type SignalisationType } from '../domain/signalisation'
 
 interface SignalisationRow {
   id: string
@@ -51,6 +51,15 @@ export function rejectedAccount(response: Response): boolean {
   return response.status === 401 || response.status === 403
 }
 
+/** La fonction SQL lève `already_voted` quand le compte a déjà voté « plus là » sur ce signalement */
+async function alreadyVoted(response: Response): Promise<boolean> {
+  try {
+    return ((await response.clone().json()) as { message?: string }).message === 'already_voted'
+  } catch {
+    return false
+  }
+}
+
 /**
  * Stocke les signalements dans la table Supabase `signalisations`.
  * Lecture publique avec la clé anon ; écritures avec le jeton du compte (RLS, voir migration auth).
@@ -91,6 +100,7 @@ export class SupabaseSignalisationStore implements SignalisationStore {
       body: JSON.stringify(args),
     })
     if (rejectedAccount(response)) throw new AuthError('not_signed_in')
+    if (response.status === 400 && (await alreadyVoted(response))) throw new Error(ALREADY_VOTED_GONE)
     if (!response.ok) throw new Error(`Supabase : échec de l'opération sur le signalement (HTTP ${response.status})`)
     const rows = (await response.json()) as SignalisationRow[] | SignalisationRow
     const row = Array.isArray(rows) ? rows[0] : rows
@@ -108,6 +118,20 @@ export class SupabaseSignalisationStore implements SignalisationStore {
 
   addComment(id: string, text: string): Promise<Signalisation> {
     return this.rpc('add_signalisation_comment', { p_id: id, p_comment: text })
+  }
+
+  /** Sans session, aucun vote : on n'appelle pas le serveur */
+  async myGoneVotes(): Promise<string[]> {
+    if (!(await this.auth.accessToken())) return []
+    const response = await fetch(`${this.endpoint.replace('/signalisations', '')}/rpc/my_gone_votes`, {
+      method: 'POST',
+      headers: await this.writeHeaders(),
+      body: '{}',
+    })
+    if (rejectedAccount(response)) throw new AuthError('not_signed_in')
+    if (!response.ok) throw new Error(`Supabase : échec de la lecture des votes (HTTP ${response.status})`)
+    const rows = (await response.json()) as { signalisation_id: string }[]
+    return rows.map((row) => row.signalisation_id)
   }
 
   async list(): Promise<Signalisation[]> {

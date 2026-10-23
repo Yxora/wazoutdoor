@@ -6,6 +6,7 @@ import { NasaFirmsFireRisk } from './nasaFirmsFireRisk'
 import { OpenMeteoDaylight } from './openMeteoDaylight'
 import { OpenMeteoForecast } from './openMeteoForecast'
 import { RefugesInfoPlaces } from './refugesInfoPlaces'
+import { LocalSignalisationStore } from './localSignalisationStore'
 import { SupabasePhotoStore } from './supabasePhotoStore'
 import { SupabaseSignalisationStore } from './supabaseSignalisationStore'
 import { AuthError } from '../application/authError'
@@ -371,6 +372,54 @@ describe('SupabaseSignalisationStore', () => {
     ])
     expect(calls[0].url).toContain('order=created_at.desc')
     expect(calls[0].headers).toMatchObject({ Authorization: 'Bearer anon-key' })
+  })
+})
+
+describe('SupabaseSignalisationStore : votes « Plus là »', () => {
+  it('traduit already_voted en message lisible', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ code: 'P0001', message: 'already_voted' }), { status: 400 })),
+    )
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    await expect(store.reportGone('a1')).rejects.toThrow('Vous avez déjà dit qu’il n’y est plus.')
+  })
+
+  it('lit les votes du compte avec son jeton', async () => {
+    const calls = stubFetch({ 'rpc/my_gone_votes': [{ signalisation_id: 'a1' }, { signalisation_id: 'b2' }] })
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedIn)
+    expect(await store.myGoneVotes()).toEqual(['a1', 'b2'])
+    expect(calls[0].headers).toMatchObject({ Authorization: 'Bearer jeton-julie' })
+  })
+
+  it('sans session, aucun vote et aucun appel', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    const store = new SupabaseSignalisationStore('https://example.supabase.co', 'anon-key', signedOut)
+    expect(await store.myGoneVotes()).toEqual([])
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('LocalSignalisationStore : votes « Plus là »', () => {
+  function memoryStorage() {
+    const data = new Map<string, string>()
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v), removeItem: (k: string) => void data.delete(k) }
+  }
+  const tree: Signalisation = { id: 'a1', type: 'arbre', description: '', position: { lat: 48, lng: 7 }, createdAt: new Date() }
+
+  it('refuse un second vote, puis l’accepte après « Toujours là »', async () => {
+    vi.stubGlobal('localStorage', memoryStorage())
+    const store = new LocalSignalisationStore()
+    await store.save(tree)
+
+    expect((await store.reportGone('a1')).goneVotes).toBe(1)
+    expect(await store.myGoneVotes()).toEqual(['a1'])
+    await expect(store.reportGone('a1')).rejects.toThrow('Vous avez déjà dit qu’il n’y est plus.')
+
+    await store.confirm('a1')
+    expect(await store.myGoneVotes()).toEqual([])
+    expect((await store.reportGone('a1')).goneVotes).toBe(1)
   })
 })
 

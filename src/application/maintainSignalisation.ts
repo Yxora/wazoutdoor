@@ -26,6 +26,12 @@ export async function reportSignalisationGone(auth: Pick<AuthGateway, 'current'>
   return store.reportGone(id)
 }
 
+/** Signalements où le compte a déjà voté « Plus là » : leur bouton est grisé. Vide sans compte */
+export async function listMyGoneVotes(auth: Pick<AuthGateway, 'current'>, store: SignalisationStore): Promise<Set<string>> {
+  if (!auth.current()) return new Set()
+  return new Set(await store.myGoneVotes())
+}
+
 /** Ajoute un commentaire à un signalement existant */
 export async function commentSignalisation(auth: Pick<AuthGateway, 'current'>, store: SignalisationStore, id: string, text: string): Promise<Signalisation> {
   requireAccount(auth)
