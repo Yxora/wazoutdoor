@@ -313,19 +313,7 @@
   box-shadow: var(--od-focus-ring);
 }
 
-/* Retirer mon signalement : deux choix, chacun avec son explication */
-.od-button.remove-dialog__choice {
-  display: grid;
-  gap: 2px;
-  justify-items: start;
-  padding: var(--od-space-2) var(--od-space-4);
-  text-align: left;
-}
-
-.remove-dialog__choice small {
-  font: var(--od-caption);
-}
-
+/* Supprimer mon signalement : action destructive */
 .od-button--danger {
   border: 1px solid var(--od-status-closed);
   background: var(--od-status-closed);

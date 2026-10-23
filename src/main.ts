@@ -7,7 +7,6 @@ import {
   deleteOwnSignalisation,
   listMyGoneVotes,
   listMySignalisations,
-  resolveOwnSignalisation,
   reportSignalisationGone,
 } from './application/maintainSignalisation'
 import { listActiveSignalisations } from './application/listSignalisations'
@@ -260,7 +259,6 @@ async function main() {
     confirm: (s) => confirmSignalisationStillThere(auth, signalisationStore, s.id),
     reportGone: (s) => reportSignalisationGone(auth, signalisationStore, s.id),
     comment: (s, text) => commentSignalisation(auth, signalisationStore, s.id, text),
-    resolve: (s) => resolveOwnSignalisation(auth, signalisationStore, s.id),
     remove: (s) => deleteOwnSignalisation(auth, signalisationStore, photoStore, s),
     createSignInForm: newSignInForm,
   })

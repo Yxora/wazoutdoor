@@ -288,8 +288,6 @@ export interface SignalisationActions {
   confirm(signalisation: Signalisation): Promise<Signalisation>
   reportGone(signalisation: Signalisation): Promise<Signalisation>
   comment(signalisation: Signalisation, text: string): Promise<Signalisation>
-  /** L'auteur·rice le marque résolu : il quitte la carte */
-  resolve(signalisation: Signalisation): Promise<Signalisation>
   /** L'auteur·rice le supprime, avec sa photo et ses commentaires */
   remove(signalisation: Signalisation): Promise<void>
   /** Formulaire de connexion, montré à qui veut confirmer, voter ou commenter sans compte */
@@ -400,10 +398,10 @@ function signalisationPopup(
     const trash = document.createElement('button')
     trash.type = 'button'
     trash.className = 'od-popup__trash'
-    trash.setAttribute('aria-label', 'Retirer mon signalement')
-    trash.title = 'Retirer mon signalement'
+    trash.setAttribute('aria-label', 'Supprimer mon signalement')
+    trash.title = 'Supprimer mon signalement'
     trash.append(odIcon(TRASH_ICON_PATH, 18))
-    trash.addEventListener('click', () => openRemoveDialog(signalisation, lifecycle.actions, lifecycle.onChanged, lifecycle.onRemoved))
+    trash.addEventListener('click', () => openRemoveDialog(signalisation, lifecycle.actions, lifecycle.onRemoved))
     box.append(trash)
   }
   if (signalisation.description) box.append(document.createElement('br'), signalisation.description)
@@ -437,58 +435,37 @@ function signalisationPopup(
   return box
 }
 
-/** L'auteur·rice retire son signalement : résolu (il reste enregistré) ou supprimé (effacé avec photo et commentaires) */
-function openRemoveDialog(
-  signalisation: Signalisation,
-  actions: SignalisationActions,
-  onChanged: (updated: Signalisation) => void,
-  onRemoved: (id: string) => void,
-): void {
+/** L'auteur·rice supprime son signalement : il est effacé avec sa photo et ses commentaires */
+function openRemoveDialog(signalisation: Signalisation, actions: SignalisationActions, onRemoved: (id: string) => void): void {
   const label = SIGNALISATION_TYPE_LABEL[signalisation.type]
-  const { box, close } = openDialog({ title: 'Retirer mon signalement', label: `Retirer mon signalement : ${label}` })
+  const { box, close } = openDialog({ title: 'Supprimer mon signalement', label: `Supprimer mon signalement : ${label}` })
+  const intro = document.createElement('p')
+  intro.className = 'signin__text'
+  intro.textContent = `${label} : il sera effacé, avec sa photo et ses commentaires.`
   const error = document.createElement('p')
   error.className = 'od-error'
   error.setAttribute('role', 'alert')
   error.hidden = true
-
-  const choice = (text: string, hint: string, tone: 'secondary' | 'danger', run: () => Promise<void>) => {
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.className = `od-button od-button--${tone} remove-dialog__choice`
-    const strong = document.createElement('strong')
-    strong.textContent = text
-    const small = document.createElement('small')
-    small.textContent = hint
-    button.append(strong, small)
-    button.addEventListener('click', async () => {
-      box.querySelectorAll<HTMLButtonElement>('.remove-dialog__choice').forEach((b) => (b.disabled = true))
-      error.hidden = true
-      try {
-        await run()
-        close()
-      } catch (cause) {
-        error.textContent = `Impossible : ${cause instanceof Error ? cause.message : 'erreur réseau'}`
-        error.hidden = false
-        box.querySelectorAll<HTMLButtonElement>('.remove-dialog__choice').forEach((b) => (b.disabled = false))
-      }
-    })
-    return button
-  }
-
-  const resolved = choice('Il est résolu', 'Il disparaît de la carte et reste enregistré.', 'secondary', async () => {
-    onChanged(await actions.resolve(signalisation))
-    showToast('Merci, signalement marqué résolu.')
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'od-button od-button--danger'
+  button.textContent = 'Supprimer mon signalement'
+  button.addEventListener('click', async () => {
+    button.disabled = true
+    error.hidden = true
+    try {
+      await actions.remove(signalisation)
+      close()
+      onRemoved(signalisation.id)
+      showToast('Signalement supprimé.')
+    } catch (cause) {
+      error.textContent = `Impossible : ${cause instanceof Error ? cause.message : 'erreur réseau'}`
+      error.hidden = false
+      button.disabled = false
+    }
   })
-  const removed = choice('Supprimer', 'Il est effacé, avec sa photo et ses commentaires.', 'danger', async () => {
-    await actions.remove(signalisation)
-    onRemoved(signalisation.id)
-    showToast('Signalement supprimé.')
-  })
-  const intro = document.createElement('p')
-  intro.className = 'signin__text'
-  intro.textContent = `${label} : que voulez-vous faire ?`
-  box.append(intro, resolved, removed, error)
-  setTimeout(() => resolved.focus(), 0)
+  box.append(intro, button, error)
+  setTimeout(() => button.focus(), 0)
 }
 
 export interface SignalisationLayer {
