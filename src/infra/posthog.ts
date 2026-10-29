@@ -19,6 +19,7 @@ if (!isPostHogConfigured) {
     defaults: '2026-08-30',
     autocapture: false,
     disable_session_recording: true,
+    disable_compression: true,
   })
 }
 
