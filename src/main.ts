@@ -30,7 +30,7 @@ import { LocalAuth } from './infra/localAuth'
 import { LocalPhotoStore } from './infra/localPhotoStore'
 import { LocalSignalisationStore } from './infra/localSignalisationStore'
 import { LocalUserStore } from './infra/localUserStore'
-import { isPostHogConfigured, posthog, posthogLogger } from './infra/posthog'
+import { isPostHogConfigured, posthog } from './infra/posthog'
 import { MeteoFranceVigilance } from './infra/meteoFranceVigilance'
 import { NasaFirmsFireRisk } from './infra/nasaFirmsFireRisk'
 import { OpenMeteoDaylight } from './infra/openMeteoDaylight'
@@ -200,7 +200,6 @@ async function main() {
   }
 
   syncPostHogIdentity()
-  posthogLogger.info('application initialized', { uses_supabase: Boolean(supabaseUrl && supabaseAnonKey) })
 
   function captureEvent(event: string, properties: Record<string, string | number | boolean | null>) {
     if (isPostHogConfigured) posthog.capture(event, properties)
@@ -267,11 +266,7 @@ async function main() {
           score_verdict: evaluation.score.verdict,
           was_vetoed: evaluation.score.vetoedBy !== null,
         })
-        posthogLogger.info('route evaluation completed', {
-          profile_id: profileId,
-          score_verdict: evaluation.score.verdict,
-          was_vetoed: evaluation.score.vetoedBy !== null,
-        })
+
         layers.show(route, evaluation.places, evaluation.protectedAreas)
         routeShown = true
         lastView = { routeName: route.name, profile, start, evaluation, standardCriteria: auth.current() === null }
@@ -365,11 +360,7 @@ async function main() {
         has_description: description.trim().length > 0,
         has_photo: photo !== undefined,
       })
-      posthogLogger.info('signalisation reported', {
-        signalisation_type: type,
-        has_description: description.trim().length > 0,
-        has_photo: photo !== undefined,
-      })
+
       signalisationLayer.add(signalisation, { mine: true })
       // Après l'envoi : retour sur la carte, centrée sur le nouveau signalement
       nav.showMap()

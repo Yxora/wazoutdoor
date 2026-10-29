@@ -17,17 +17,9 @@ if (!isPostHogConfigured) {
     api_host: posthogHost,
     persistence: 'memory',
     defaults: '2026-08-30',
-    logs: {
-      serviceName: 'wazoutdoor-web',
-      environment: import.meta.env.MODE,
-    },
+    autocapture: false,
+    disable_session_recording: true,
   })
-}
-
-export const posthogLogger = {
-  info(message: string, attributes: Record<string, string | number | boolean | null>) {
-    if (isPostHogConfigured) posthog.logger.info(message, attributes)
-  },
 }
 
 export { posthog }
