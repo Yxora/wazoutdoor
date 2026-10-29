@@ -38,8 +38,8 @@ jobs:
           # Clé NASA FIRMS : même limite (visible dans le JavaScript). Lue dans les secrets, ou dans les variables du dépôt à défaut
           VITE_FIRMS_API_KEY: ${{ secrets.VITE_FIRMS_API_KEY || vars.VITE_FIRMS_API_KEY }}
           # PostHog : clé publique et hôte, visibles dans le JavaScript (acceptable, cf. CLAUDE.md)
-          VITE_POSTHOG_KEY: ${{ vars.VITE_POSTHOG_KEY }}
-          VITE_POSTHOG_HOST: ${{ vars.VITE_POSTHOG_HOST }}
+          VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
