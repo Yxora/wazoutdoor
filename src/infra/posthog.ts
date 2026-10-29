@@ -21,11 +21,6 @@ if (!isPostHogConfigured) {
       serviceName: 'wazoutdoor-web',
       environment: import.meta.env.MODE,
     },
-    capture_exceptions: {
-      capture_unhandled_errors: true,
-      capture_unhandled_rejections: true,
-      capture_console_errors: false,
-    },
   })
 }
 
