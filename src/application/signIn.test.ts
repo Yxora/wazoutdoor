@@ -28,6 +28,7 @@ function fakeAuth(): AuthGateway & { calls: string[]; account: Account | null } 
       return JULIE
     },
     accessToken: async () => null,
+    signInWithGoogle: async () => { auth.calls.push('google') },
     signOut: async () => {
       auth.calls.push('signOut')
       auth.account = null

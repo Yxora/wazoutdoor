@@ -13,7 +13,7 @@ import { listActiveSignalisations } from './application/listSignalisations'
 import { locateUser } from './application/locateUser'
 import type { AuthGateway, PhotoStore, SignalisationStore, UserStore } from './application/ports'
 import { reportSignalisation } from './application/reportSignalisation'
-import { finishSignIn, sendSignInLink, verifyCode } from './application/signIn'
+import { finishSignIn, sendSignInLink, signInWithGoogle, verifyCode } from './application/signIn'
 import { currentUser, loadCurrentUser } from './application/currentUser'
 import { deleteAccount } from './application/deleteAccount'
 import { signOut } from './application/signOut'
@@ -202,6 +202,7 @@ async function main() {
       verifyCode: async (email, code) => {
         await verifyCode(auth, email, code)
       },
+      signInWithGoogle: () => signInWithGoogle(auth),
     })
 
   // Personnaliser : sans compte, création du compte ; avec compte, ses préférences et la déconnexion

@@ -27,3 +27,8 @@ export async function verifyCode(auth: AuthGateway, email: string, code: string)
   if (!CODE.test(digits)) throw new AuthError('wrong_code')
   return auth.verifyCode(normalizeEmail(email), digits)
 }
+
+/** Redirige vers Google OAuth ; le retour passe par `finishSignIn` (même flux PKCE que le lien magique). */
+export function signInWithGoogle(auth: AuthGateway): Promise<void> {
+  return auth.signInWithGoogle()
+}
