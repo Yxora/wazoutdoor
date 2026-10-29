@@ -1,4 +1,4 @@
-import posthog from 'posthog-js'
+import posthog from 'posthog-js/dist/module.no-external'
 
 const posthogKey = import.meta.env.VITE_POSTHOG_KEY
 const posthogHost = import.meta.env.VITE_POSTHOG_HOST
