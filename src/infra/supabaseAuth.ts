@@ -121,6 +121,11 @@ export class SupabaseAuth implements AuthGateway {
     if (error) throw translate(error, 'link')
   }
 
+  async signInWithGoogle(): Promise<void> {
+    const { error } = await this.client.signInWithOAuth({ provider: 'google', options: { redirectTo: this.redirectTo } })
+    if (error) throw translate(error, 'link')
+  }
+
   async finishSignIn(url: URL): Promise<Account | null> {
     if (!isSignInReturn(url)) return null
     // Lien périmé : Supabase revient avec l'erreur dans la requête ou dans le fragment

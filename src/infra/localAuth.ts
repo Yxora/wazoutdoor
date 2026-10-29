@@ -18,7 +18,11 @@ export class LocalAuth implements AuthGateway {
   }
 
   async verifyCode(): Promise<Account> {
-    throw new Error('Connexion indisponible : Supabase n’est pas configuré.')
+    throw new Error(`Connexion indisponible : Supabase n’est pas configuré.`)
+  }
+
+  async signInWithGoogle(): Promise<void> {
+    throw new Error(`Connexion indisponible : Supabase n’est pas configuré.`)
   }
 
   async accessToken(): Promise<string | null> {

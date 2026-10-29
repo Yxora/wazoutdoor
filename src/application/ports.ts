@@ -147,6 +147,8 @@ export interface AuthGateway {
   finishSignIn(url: URL): Promise<Account | null>
   /** Code à 6 chiffres reçu par email, saisi dans l'app */
   verifyCode(email: string, code: string): Promise<Account>
+  /** Redirige vers Google OAuth (flux PKCE) ; le retour passe par `finishSignIn` */
+  signInWithGoogle(): Promise<void>
   /** Jeton à joindre aux appels Supabase, rafraîchi si besoin ; null sans session */
   accessToken(): Promise<string | null>
   signOut(): Promise<void>

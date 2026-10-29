@@ -749,6 +749,28 @@
   display: none;
 }
 
+.signin__google {
+  display: grid;
+  gap: var(--od-space-3);
+}
+
+.signin__separator {
+  display: flex;
+  align-items: center;
+  gap: var(--od-space-2);
+  margin: 0;
+  font: var(--od-caption);
+  color: var(--od-ink-secondary);
+}
+
+.signin__separator::before,
+.signin__separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--od-line);
+}
+
 /* Dans le panneau Personnaliser, les règles `#panel button` passent avant les classes od-* */
 #panel .od-button--primary {
   background: var(--od-brand);
