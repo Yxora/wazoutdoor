@@ -20,6 +20,7 @@ if (!isPostHogConfigured) {
     autocapture: false,
     disable_session_recording: true,
     disable_compression: true,
+    request_batching: false,
   })
 }
 
