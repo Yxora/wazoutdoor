@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@supabase/auth-js": "2.117.3",
-    "leaflet": "^1.9.4"
+    "leaflet": "^1.9.4",
+    "posthog-js": "^1.442.1"
   }
 }

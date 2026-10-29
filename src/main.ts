@@ -30,6 +30,7 @@ import { LocalAuth } from './infra/localAuth'
 import { LocalPhotoStore } from './infra/localPhotoStore'
 import { LocalSignalisationStore } from './infra/localSignalisationStore'
 import { LocalUserStore } from './infra/localUserStore'
+import { isPostHogConfigured, posthog, posthogLogger } from './infra/posthog'
 import { MeteoFranceVigilance } from './infra/meteoFranceVigilance'
 import { NasaFirmsFireRisk } from './infra/nasaFirmsFireRisk'
 import { OpenMeteoDaylight } from './infra/openMeteoDaylight'
@@ -179,7 +180,31 @@ async function main() {
   const userStore: UserStore =
     supabaseUrl && supabaseAnonKey ? new SupabaseUserStore(supabaseUrl, supabaseAnonKey, auth) : new LocalUserStore(localStorage, DEMO_USER)
   const user = () => currentUser(auth, userStore)
+  let identifiedAccountId: string | null = null
   let lastView: ResultView | null = null
+
+  function syncPostHogIdentity() {
+    if (!isPostHogConfigured) return
+
+    const account = auth.current()
+    if (!account) {
+      if (identifiedAccountId !== null) posthog.reset()
+      identifiedAccountId = null
+      return
+    }
+
+    if (identifiedAccountId === account.id) return
+    if (identifiedAccountId !== null) posthog.reset()
+    posthog.identify(account.id, { email: account.email })
+    identifiedAccountId = account.id
+  }
+
+  syncPostHogIdentity()
+  posthogLogger.info('application initialized', { uses_supabase: Boolean(supabaseUrl && supabaseAnonKey) })
+
+  function captureEvent(event: string, properties: Record<string, string | number | boolean | null>) {
+    if (isPostHogConfigured) posthog.capture(event, properties)
+  }
 
   /** Activités proposées, red flags sur la carte et score affiché suivent les préférences en vigueur */
   function applyUser(next: User) {
@@ -237,6 +262,16 @@ async function main() {
         const profile = PROFILES[profileId]
         const { preferences, signalisationPreferences } = user()
         const evaluation = await evaluateRoute(deps, { route, profile, start, preferences, signalisationPreferences })
+        captureEvent('route_evaluated', {
+          profile_id: profileId,
+          score_verdict: evaluation.score.verdict,
+          was_vetoed: evaluation.score.vetoedBy !== null,
+        })
+        posthogLogger.info('route evaluation completed', {
+          profile_id: profileId,
+          score_verdict: evaluation.score.verdict,
+          was_vetoed: evaluation.score.vetoedBy !== null,
+        })
         layers.show(route, evaluation.places, evaluation.protectedAreas)
         routeShown = true
         lastView = { routeName: route.name, profile, start, evaluation, standardCriteria: auth.current() === null }
@@ -262,10 +297,25 @@ async function main() {
   })
 
   const signalisationLayer = createSignalisationLayer(map, {
-    confirm: (s) => confirmSignalisationStillThere(auth, signalisationStore, s.id),
-    reportGone: (s) => reportSignalisationGone(auth, signalisationStore, s.id),
-    comment: (s, text) => commentSignalisation(auth, signalisationStore, s.id, text),
-    remove: (s) => deleteOwnSignalisation(auth, signalisationStore, photoStore, s),
+    confirm: async (s) => {
+      const updated = await confirmSignalisationStillThere(auth, signalisationStore, s.id)
+      captureEvent('signalisation_status_confirmed', { signalisation_type: s.type })
+      return updated
+    },
+    reportGone: async (s) => {
+      const updated = await reportSignalisationGone(auth, signalisationStore, s.id)
+      captureEvent('signalisation_reported_gone', { signalisation_type: s.type })
+      return updated
+    },
+    comment: async (s, text) => {
+      const updated = await commentSignalisation(auth, signalisationStore, s.id, text)
+      captureEvent('signalisation_comment_added', { signalisation_type: s.type })
+      return updated
+    },
+    remove: async (s) => {
+      await deleteOwnSignalisation(auth, signalisationStore, photoStore, s)
+      captureEvent('signalisation_deleted', { signalisation_type: s.type })
+    },
     createSignInForm: newSignInForm,
   })
   // Boutons de la popup selon le compte, ses votes « Plus là » (bouton grisé) et ses signalements (poubelle)
@@ -295,7 +345,11 @@ async function main() {
       let updated = stillThere
         ? await confirmSignalisationStillThere(auth, signalisationStore, existing.id)
         : await reportSignalisationGone(auth, signalisationStore, existing.id)
-      if (comment) updated = await commentSignalisation(auth, signalisationStore, existing.id, comment)
+      captureEvent(stillThere ? 'signalisation_status_confirmed' : 'signalisation_reported_gone', { signalisation_type: existing.type })
+      if (comment) {
+        updated = await commentSignalisation(auth, signalisationStore, existing.id, comment)
+        captureEvent('signalisation_comment_added', { signalisation_type: existing.type })
+      }
       signalisationLayer.replace(updated)
       // L'utilisateur·rice vient de répondre : on centre la carte sans rouvrir la bulle
       nav.showMap()
@@ -306,6 +360,16 @@ async function main() {
     createSignInForm: newSignInForm,
     onSubmit: async ({ position, type, description, photo }) => {
       const signalisation = await reportSignalisation(auth, signalisationStore, { position, type, description, photo }, photoStore)
+      captureEvent('signalisation_reported', {
+        signalisation_type: type,
+        has_description: description.trim().length > 0,
+        has_photo: photo !== undefined,
+      })
+      posthogLogger.info('signalisation reported', {
+        signalisation_type: type,
+        has_description: description.trim().length > 0,
+        has_photo: photo !== undefined,
+      })
       signalisationLayer.add(signalisation, { mine: true })
       // Après l'envoi : retour sur la carte, centrée sur le nouveau signalement
       nav.showMap()
@@ -351,6 +415,7 @@ async function main() {
 
   // Connexion par code, par le lien dans un autre onglet, déconnexion ou session expirée
   auth.onChange(() => {
+    syncPostHogIdentity()
     renderPanel()
     applyUser(user())
     signalisationControl.refresh()
